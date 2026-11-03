@@ -66,7 +66,7 @@
     <p class="lead">Machining centers, multitasking turning centers, wire EDM and grinding machines from FANUC, Nakamura-Tome, YASDA, OKK, KIWA and United Grinding, for manufacturers across Florida.</p>
     <div class="btns">
       <a class="btn btn-r" href="tel:+13214719533">Call 321-471-9533</a>
-      <a class="btn btn-k" href="mailto:jbutz@methodsmachine.com">Email Us</a>
+      <a class="btn btn-k" href="#contact">Request a Quote</a>
     </div>
     <p class="hero-mail"><a href="mailto:jbutz@methodsmachine.com">jbutz@methodsmachine.com</a></p>
   </div>
@@ -126,11 +126,77 @@
   <div class="wrap">
     <span class="kick">Contact</span>
     <h2>Request a Quote</h2>
-    <p class="sub">Share your part, material and production volume for a machine recommendation and quote. Contact: Josh Butz, 321-471-9533, jbutz@methodsmachine.com.</p>
+    <p class="sub">Share your part, material and production volume for a machine recommendation and quote. Or call or email Josh Butz directly.</p>
     <div class="contact">
       <a class="big-link" href="tel:+13214719533"><small>Call</small>321-471-9533</a>
       <a class="big-link" href="mailto:jbutz@methodsmachine.com?subject=Quote%20request%20(floridacnc.com)"><small>Email</small>jbutz@methodsmachine.com</a>
     </div>
+    <div class="thanks" id="thanks" tabindex="-1">
+      <strong>Thanks.</strong> Your message was sent. We will reply by email.
+    </div>
+    <form class="form" action="https://formsubmit.co/josh@floridacnc.com" method="POST">
+      <input type="hidden" name="_subject" value="floridacnc.com quote request">
+      <input type="hidden" name="_template" value="table">
+      <input type="hidden" name="_captcha" value="false">
+      <input type="hidden" name="_next" value="https://floridacnc.com/#thanks">
+      <input type="text" name="_honey" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <div>
+        <label for="name">Name</label>
+        <input id="name" name="name" type="text" required autocomplete="name">
+      </div>
+      <div>
+        <label for="company">Company</label>
+        <input id="company" name="company" type="text" required autocomplete="organization">
+      </div>
+      <div>
+        <label for="city">City <span class="opt">(Florida)</span></label>
+        <input id="city" name="city" type="text" required autocomplete="address-level2">
+      </div>
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="email">
+      </div>
+      <div>
+        <label for="phone">Phone <span class="opt">(optional)</span></label>
+        <input id="phone" name="phone" type="tel" autocomplete="tel">
+      </div>
+      <div>
+        <label for="brand_interest">Brand interest</label>
+        <select id="brand_interest" name="brand_interest" required>
+          <option value="">Select a brand</option>
+          <option value="FANUC ROBODRILL">FANUC ROBODRILL</option>
+          <option value="FANUC ROBOCUT">FANUC ROBOCUT</option>
+          <option value="Nakamura-Tome">Nakamura-Tome</option>
+          <option value="YASDA">YASDA</option>
+          <option value="OKK">OKK</option>
+          <option value="KIWA">KIWA</option>
+          <option value="United Grinding">United Grinding</option>
+          <option value="Not sure">Not sure</option>
+        </select>
+      </div>
+      <fieldset class="full checks">
+        <legend>Machine type <span class="opt">(check all that apply)</span></legend>
+        <div class="chk-grid">
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Vertical mill"> Vertical mill</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Horizontal mill"> Horizontal mill</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="5-axis"> 5-axis</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Multitasking"> Multitasking</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Lathe"> Lathe</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Swiss-type"> Swiss-type</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Wire EDM"> Wire EDM</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Grinder"> Grinder</label>
+          <label class="chk"><input type="checkbox" name="machine_type[]" value="Automation / robot"> Automation / robot</label>
+        </div>
+      </fieldset>
+      <div class="full">
+        <label for="message">Message</label>
+        <textarea id="message" name="message" required placeholder="Part, material, volume, timeline…"></textarea>
+      </div>
+      <div class="full actions">
+        <button class="btn btn-k" type="submit">Send message</button>
+        <p class="hint">Or call 321-471-9533 / email jbutz@methodsmachine.com.</p>
+      </div>
+    </form>
   </div>
 </section>
 </main>

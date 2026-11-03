@@ -24,6 +24,10 @@ Colors and fonts follow Methods Machine Tools' color scheme (Josh's call), but t
 3. Confirm the one-line machine descriptions and the model picks on each machine page (models were re-picked from the manufacturers' current pages; e.g. ROBODRILL now lists FANUC's α-DiB Plus models, and Methods-only products like The Sidekick and RoboDrill Plus K900 are no longer listed).
 4. Confirm Methods is OK with a personal sales-rep site using its color scheme, product names, the footer line "Representing machines available through Methods Machine Tools" and its Shorts (and the brands' logos). The Methods logo has been removed. Five brand-logo PNGs were originally downloaded from the Methods site (see SOURCES.md); swap them for manufacturer-hosted files if preferred.
 
+
+## Quote form (added 2026-11-02)
+FormSubmit posts to `josh@floridacnc.com` (address only in the form action URL). Fields: Name, Company, City (Florida), Email, Phone optional, Brand interest, Machine type (multi-select checkboxes), Message. First submission needs FormSubmit email activation. Call/email big-links and footer unchanged.
+
 ## Preview locally
     cd website && python3 -m http.server 8000   # open http://localhost:8000
 
