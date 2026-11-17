@@ -1,0 +1,12 @@
+{
+  "name": "Shop Floor",
+  "short_name": "Shop Floor",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12171e",
+  "theme_color": "#12171e",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
