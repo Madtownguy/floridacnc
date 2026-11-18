@@ -192,6 +192,7 @@ export function createPlayer(tracks) {
 
   function beginTrack(id) {
     if (!playing || wantedId !== id || !ctx || ctx.state !== "running") return;
+    if (timer || audioEl) return;
     const track = tracks.find((item) => item.id === id);
     const pattern = track && SYNTH[track.id];
     applyGain();
@@ -206,6 +207,33 @@ export function createPlayer(tracks) {
     } else if (pattern) {
       playPattern(pattern, generation);
     }
+  }
+
+  function gestureResume() {
+    const audio = context();
+    if (audio.state === "running") return Promise.resolve();
+    let pending = null;
+    try { pending = audio.resume(); } catch { /* try the silent buffer below */ }
+    try {
+      const buf = audio.createBuffer(1, 1, audio.sampleRate || 22050);
+      const src = audio.createBufferSource();
+      src.buffer = buf;
+      src.connect(master);
+      src.start(0);
+    } catch { /* Safari can refuse this until the tap is accepted. */ }
+    return pending || Promise.resolve();
+  }
+
+  function kick() {
+    if (!playing || !wantedId || muted) return;
+    const audio = context();
+    const go = () => {
+      if (!playing || !wantedId || muted || audio.state !== "running") return;
+      if (!timer && !audioEl) beginTrack(wantedId);
+    };
+    if (audio.state === "running") go();
+    const pending = gestureResume();
+    if (pending && pending.then) pending.then(go).catch(go);
   }
 
   function nudge() {
@@ -233,16 +261,17 @@ export function createPlayer(tracks) {
       const track = tracks.find((item) => item.id === id);
       if (!track) return;
       const audio = context();
+      if (wantedId === id && playing && !muted) {
+        kick();
+        return;
+      }
       hush();
       wantedId = id;
       playing = true;
-      const go = () => beginTrack(id);
-      if (audio.state === "running") go();
-      else {
-        const pending = audio.resume();
-        if (pending && pending.then) pending.then(go).catch(go);
-        else go();
-      }
+      muted = false;
+      if (audio.state === "running") beginTrack(id);
+      const pending = gestureResume();
+      if (pending && pending.then) pending.then(() => beginTrack(id)).catch(() => beginTrack(id));
     },
     stop() {
       playing = false;
@@ -257,7 +286,7 @@ export function createPlayer(tracks) {
     setMuted(next) {
       muted = !!next;
       applyGain();
-      if (!muted) nudge();
+      if (!muted) kick();
     },
     setEffects(on) {
       effects = on !== false;
@@ -283,16 +312,7 @@ export function createPlayer(tracks) {
       }
     },
     resumeIfWanted() {
-      if (!playing || !wantedId || muted) return;
-      const audio = context();
-      if (audio.state === "running") {
-        if (!timer && !audioEl) beginTrack(wantedId);
-        return;
-      }
-      const pending = audio.resume();
-      if (pending && pending.then) pending.then(() => {
-        if (!timer && !audioEl) beginTrack(wantedId);
-      });
+      kick();
     },
     prepareForBackground() {
       const id = wantedId;

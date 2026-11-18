@@ -12,6 +12,7 @@ import {
   INGREDIENTS,
   MUSIC_TRACKS,
   SEASON_PLAY_MS,
+  SEASON_START_BONUS,
   SHOP,
   STICKERS,
   THANKS,
@@ -74,6 +75,7 @@ export function normalize(data) {
         usedSecondChance: !!season.usedSecondChance,
         resolved,
         lastPay: clampInt(season.lastPay, 0, 999999, 0),
+        bonusPaid: season.bonusPaid !== false,
         plate: {
           treat: TREATS.some((t) => t.id === season.plate?.treat) ? season.plate.treat : null,
           topping: TOPPINGS.some((t) => t.id === season.plate?.topping) ? season.plate.topping : null,
@@ -410,10 +412,11 @@ export function startSeason(state, rng = Math.random) {
     usedSecondChance: false,
     resolved: null,
     lastPay: 0,
+    bonusPaid: true,
     plate: { treat: null, topping: null },
     order: null,
   };
-  const draft = { ...state, season };
+  const draft = { ...state, coins: state.coins + SEASON_START_BONUS, season };
   const order = state.tutorialDone ? rollOrder(draft, rng) : tutorialOrder();
   return { ...draft, season: { ...season, order } };
 }
@@ -501,6 +504,7 @@ export function takeResolution(state) {
     usedSecondChance: false,
     resolved: null,
     lastPay: 0,
+    bonusPaid: season.bonusPaid !== false,
     plate: { treat: null, topping: null },
     order: null,
   };

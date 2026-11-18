@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MUSIC_TRACKS, SEASON_PLAY_MS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, cleanBakerName } from "./data.js";
+import { MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
   clockLabel,
@@ -174,6 +174,33 @@ test("vanilla is the plain topping name in labels and orders", () => {
   assert.equal(said.line, "One vanilla cupcake, please!");
   assert.equal(said.wanted, "a vanilla cupcake");
   assert.equal(getTopping("plain").name, "Vanilla");
+});
+
+test("each Selling Season adds 30 coins once, on top of what she already has", () => {
+  assert.equal(SEASON_START_BONUS, 30);
+  const fresh = newGame();
+  assert.equal(fresh.coins, 18);
+  const first = startSeason(fresh, () => 0);
+  assert.equal(first.coins, 18 + SEASON_START_BONUS);
+  assert.equal(first.season.bonusPaid, true);
+  const store = memory();
+  save(first, store);
+  assert.equal(load(store).coins, 48);
+  assert.equal(load(store).season.bonusPaid, true);
+  const again = load(store);
+  assert.equal(again.coins, 48);
+  const closed = closeSeason({ ...again, coins: 70 });
+  assert.equal(closed.state.coins, 70);
+  const next = startSeason(closed.state, () => 0);
+  assert.equal(next.coins, 100);
+  const old = startSeason(newGame(), () => 0);
+  old.coins = 22;
+  delete old.season.bonusPaid;
+  const oldStore = memory();
+  save(old, oldStore);
+  const reopened = load(oldStore);
+  assert.equal(reopened.coins, 22);
+  assert.equal(reopened.season.bonusPaid, true);
 });
 
 test("baker name defaults to Madison and stays short", () => {
