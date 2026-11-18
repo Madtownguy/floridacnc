@@ -14,98 +14,60 @@ function midi(note) {
   return 440 * 2 ** ((note - 69) / 12);
 }
 
-/** Sprinkle Party: bright and bouncy, original pentatonic loop. */
-const SPRINKLE = {
-  bpm: 124,
-  beats: 8,
-  notes: [
-    { at: 0, n: 76, dur: 0.45, g: 0.09, wave: "triangle" },
-    { at: 0.5, n: 79, dur: 0.45, g: 0.09, wave: "triangle" },
-    { at: 1, n: 81, dur: 0.45, g: 0.1, wave: "triangle" },
-    { at: 1.5, n: 79, dur: 0.4, g: 0.08, wave: "triangle" },
-    { at: 2, n: 76, dur: 0.45, g: 0.09, wave: "triangle" },
-    { at: 2.5, n: 74, dur: 0.4, g: 0.08, wave: "triangle" },
-    { at: 3, n: 72, dur: 0.45, g: 0.09, wave: "triangle" },
-    { at: 3.5, n: 74, dur: 0.4, g: 0.08, wave: "triangle" },
-    { at: 4, n: 76, dur: 0.45, g: 0.09, wave: "triangle" },
-    { at: 4.5, n: 79, dur: 0.45, g: 0.1, wave: "triangle" },
-    { at: 5, n: 84, dur: 0.5, g: 0.1, wave: "triangle" },
-    { at: 5.5, n: 81, dur: 0.4, g: 0.08, wave: "triangle" },
-    { at: 6, n: 79, dur: 0.45, g: 0.09, wave: "triangle" },
-    { at: 6.5, n: 76, dur: 0.4, g: 0.08, wave: "triangle" },
-    { at: 7, n: 74, dur: 0.45, g: 0.08, wave: "triangle" },
-    { at: 7.5, n: 72, dur: 0.7, g: 0.09, wave: "triangle" },
-    { at: 0, n: 60, dur: 1.4, g: 0.05, wave: "sine" },
-    { at: 2, n: 67, dur: 1.4, g: 0.05, wave: "sine" },
-    { at: 4, n: 69, dur: 1.4, g: 0.05, wave: "sine" },
-    { at: 6, n: 67, dur: 1.4, g: 0.05, wave: "sine" },
-  ],
-};
-
-/** Midnight Muffins: slow, soft, cozy. */
+/** Midnight Muffins: slow sine melody over a warm held chord. */
 const MUFFINS = {
-  bpm: 72,
+  bpm: 64,
   beats: 16,
   notes: [
-    { at: 0, n: 67, dur: 1.8, g: 0.07, wave: "sine" },
-    { at: 2, n: 64, dur: 1.8, g: 0.07, wave: "sine" },
-    { at: 4, n: 62, dur: 1.8, g: 0.06, wave: "sine" },
-    { at: 6, n: 60, dur: 1.8, g: 0.07, wave: "sine" },
-    { at: 8, n: 64, dur: 1.8, g: 0.07, wave: "sine" },
-    { at: 10, n: 62, dur: 1.8, g: 0.06, wave: "sine" },
-    { at: 12, n: 60, dur: 1.8, g: 0.07, wave: "sine" },
-    { at: 14, n: 57, dur: 1.8, g: 0.06, wave: "sine" },
-    { at: 0, n: 48, dur: 8, g: 0.035, wave: "sine" },
-    { at: 0, n: 55, dur: 8, g: 0.03, wave: "sine" },
-    { at: 8, n: 53, dur: 8, g: 0.035, wave: "sine" },
-    { at: 8, n: 60, dur: 8, g: 0.028, wave: "sine" },
+    { at: 0, n: 67, dur: 2.2, g: 0.045, wave: "sine" },
+    { at: 2.5, n: 64, dur: 2.2, g: 0.04, wave: "sine" },
+    { at: 5, n: 62, dur: 2.2, g: 0.04, wave: "sine" },
+    { at: 7.5, n: 60, dur: 2.4, g: 0.045, wave: "sine" },
+    { at: 10, n: 64, dur: 2.2, g: 0.04, wave: "sine" },
+    { at: 12.5, n: 62, dur: 1.8, g: 0.038, wave: "sine" },
+    { at: 14.2, n: 60, dur: 1.6, g: 0.04, wave: "sine" },
+    { at: 0, n: 48, dur: 16, g: 0.028, wave: "sine" },
+    { at: 0, n: 55, dur: 16, g: 0.022, wave: "sine" },
   ],
 };
 
-/** Flan Dance: short bouncy notes. */
-const FLAN = {
-  bpm: 142,
-  beats: 8,
+/** Cozy Cocoa: low, warm, unhurried. */
+const COCOA = {
+  bpm: 60,
+  beats: 16,
   notes: [
-    { at: 0, n: 72, dur: 0.22, g: 0.09, wave: "square" },
-    { at: 0.5, n: 76, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 1, n: 79, dur: 0.22, g: 0.09, wave: "square" },
-    { at: 1.5, n: 76, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 2, n: 81, dur: 0.22, g: 0.09, wave: "square" },
-    { at: 2.5, n: 79, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 3, n: 76, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 3.5, n: 79, dur: 0.22, g: 0.09, wave: "square" },
-    { at: 4, n: 84, dur: 0.28, g: 0.09, wave: "square" },
-    { at: 4.5, n: 79, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 5, n: 76, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 5.5, n: 72, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 6, n: 74, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 6.5, n: 76, dur: 0.22, g: 0.09, wave: "square" },
-    { at: 7, n: 79, dur: 0.22, g: 0.08, wave: "square" },
-    { at: 7.5, n: 76, dur: 0.3, g: 0.09, wave: "square" },
-    { at: 0, n: 48, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 0.5, n: 60, dur: 0.16, g: 0.05, wave: "triangle" },
-    { at: 1, n: 55, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 1.5, n: 67, dur: 0.16, g: 0.05, wave: "triangle" },
-    { at: 2, n: 48, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 2.5, n: 60, dur: 0.16, g: 0.05, wave: "triangle" },
-    { at: 3, n: 55, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 3.5, n: 67, dur: 0.16, g: 0.05, wave: "triangle" },
-    { at: 4, n: 53, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 4.5, n: 65, dur: 0.16, g: 0.05, wave: "triangle" },
-    { at: 5, n: 60, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 5.5, n: 72, dur: 0.16, g: 0.05, wave: "triangle" },
-    { at: 6, n: 55, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 6.5, n: 67, dur: 0.16, g: 0.05, wave: "triangle" },
-    { at: 7, n: 48, dur: 0.2, g: 0.06, wave: "triangle" },
-    { at: 7.5, n: 60, dur: 0.16, g: 0.05, wave: "triangle" },
+    { at: 0, n: 60, dur: 3, g: 0.04, wave: "sine" },
+    { at: 3.2, n: 64, dur: 2.6, g: 0.038, wave: "sine" },
+    { at: 6, n: 67, dur: 3, g: 0.04, wave: "sine" },
+    { at: 9.2, n: 64, dur: 2.4, g: 0.036, wave: "sine" },
+    { at: 12, n: 62, dur: 2.2, g: 0.036, wave: "sine" },
+    { at: 14.2, n: 60, dur: 1.7, g: 0.04, wave: "sine" },
+    { at: 0, n: 48, dur: 16, g: 0.03, wave: "sine" },
+    { at: 0, n: 52, dur: 16, g: 0.02, wave: "sine" },
+  ],
+};
+
+/** Sweet Flan Lullaby: very slow, soft, rocking. */
+const LULLABY = {
+  bpm: 56,
+  beats: 16,
+  notes: [
+    { at: 0, n: 72, dur: 2.4, g: 0.035, wave: "sine" },
+    { at: 2.5, n: 69, dur: 2.2, g: 0.032, wave: "sine" },
+    { at: 5, n: 67, dur: 2.4, g: 0.032, wave: "sine" },
+    { at: 7.6, n: 69, dur: 2, g: 0.03, wave: "sine" },
+    { at: 10, n: 72, dur: 2.2, g: 0.034, wave: "sine" },
+    { at: 12.4, n: 74, dur: 1.6, g: 0.03, wave: "sine" },
+    { at: 14, n: 72, dur: 1.8, g: 0.032, wave: "sine" },
+    { at: 0, n: 55, dur: 16, g: 0.022, wave: "sine" },
+    { at: 0, n: 60, dur: 16, g: 0.018, wave: "sine" },
   ],
 };
 
 const SYNTH = {
-  "sprinkle-party": SPRINKLE,
   "midnight-muffins": MUFFINS,
-  "flan-dance": FLAN,
+  "cozy-cocoa": COCOA,
+  "sweet-flan-lullaby": LULLABY,
 };
 
 export function createPlayer(tracks) {
@@ -113,6 +75,7 @@ export function createPlayer(tracks) {
   let master = null;
   let volume = "medium";
   let muted = false;
+  let effects = true;
   let stopped = true;
   let timer = 0;
   let live = [];
@@ -229,6 +192,21 @@ export function createPlayer(tracks) {
       muted = !!next;
       applyGain();
     },
+    setEffects(on) {
+      effects = on !== false;
+    },
+    ding() {
+      if (!effects || muted) return;
+      try {
+        const audio = context();
+        applyGain();
+        const now = audio.currentTime;
+        chime(now, midi(76), 0.22, 0.05);
+        chime(now + 0.18, midi(81), 0.34, 0.045);
+      } catch {
+        /* The bell is optional. */
+      }
+    },
     suspend() {
       if (ctx && ctx.state === "running") ctx.suspend();
     },
@@ -236,21 +214,28 @@ export function createPlayer(tracks) {
       if (ctx && ctx.state === "suspended") ctx.resume();
     },
     blip(freq, dur) {
+      if (!effects || muted) return;
       try {
         const audio = context();
-        const osc = audio.createOscillator();
-        const amp = audio.createGain();
-        osc.frequency.value = freq;
-        osc.type = "sine";
-        amp.gain.value = 0.03;
-        osc.connect(amp);
-        amp.connect(audio.destination);
-        osc.start();
-        amp.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
-        osc.stop(audio.currentTime + dur);
+        applyGain();
+        chime(audio.currentTime, freq, dur, 0.04);
       } catch {
         /* Effects are optional. */
       }
     },
   };
+
+  function chime(when, freq, dur, amount) {
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    amp.gain.setValueAtTime(0.0001, when);
+    amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, amount), when + 0.015);
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    osc.connect(amp);
+    amp.connect(master);
+    osc.start(when);
+    osc.stop(when + dur + 0.02);
+  }
 }

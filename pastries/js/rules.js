@@ -28,6 +28,7 @@ export function newGame() {
     music: "off",
     musicMuted: false,
     musicVolume: "medium",
+    sfx: true,
     tutorialSeen: false,
     tutorialDone: false,
     pantry: {
@@ -95,6 +96,7 @@ export function normalize(data) {
     music: validMusic(data.music),
     musicMuted: !!data.musicMuted,
     musicVolume: ["soft", "medium", "loud"].includes(data.musicVolume) ? data.musicVolume : "medium",
+    sfx: data.sfx !== false,
     tutorialSeen: !!data.tutorialSeen,
     tutorialDone: !!data.tutorialDone,
     pantry: { ...base.pantry, ...(data.pantry || {}) },
@@ -314,10 +316,10 @@ export function describeOrder(order) {
   const noun = order.qty === 2 ? treat.plural : treat.name.toLowerCase();
   const count = order.qty === 2 ? "Two" : "One";
   const line = topping.id === "plain"
-    ? `${count} classic ${noun}, please!`
+    ? `${count} ${topping.phrase} ${noun}, please!`
     : `${count} ${noun} with ${topping.phrase}, please!`;
   const wanted = topping.id === "plain"
-    ? `${order.qty === 2 ? "two" : "a"} classic ${noun}`
+    ? `${order.qty === 2 ? "two" : "a"} ${topping.phrase} ${noun}`
     : `${order.qty === 2 ? "two" : "a"} ${noun} with ${topping.phrase}`;
   return { line, wanted };
 }

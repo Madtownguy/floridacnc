@@ -44,6 +44,7 @@ import { load, save } from "./state.js";
 import { bakerySvg, coinSvg, customerSvg, emptyPlateSvg, hintHandSvg, toppingSvg, treatSvg } from "./view.js";
 
 const IDLE_MS = 4500;
+const WALK_MS = 900;
 const player = createPlayer(MUSIC_TRACKS);
 
 const app = document.querySelector("#app");
@@ -78,6 +79,7 @@ function freshUi() {
     idleHint: null,
     musicOpen: false,
     musicLive: false,
+    phase: "here",
   };
 }
 
@@ -140,7 +142,7 @@ function frame(now) {
     }
     if (step.justFinished) onSeasonTimeUp();
   }
-  if (ui.screen === "play" && state.season && !ui.pause && !ui.busy && !document.hidden) {
+  if (ui.screen === "play" && state.season && !ui.pause && !ui.busy && ui.phase === "here" && !document.hidden) {
     ui.patienceMs -= dt;
     if (ui.patienceMs <= 0) {
       ui.patienceMs = 0;
@@ -191,6 +193,10 @@ function onSeasonTimeUp() {
   render();
 }
 
+function stillMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function beginCustomer() {
   if (!state.season?.order) return;
   const customer = getCustomer(state.season.order.customer);
@@ -199,7 +205,17 @@ function beginCustomer() {
   ui.mood = "neutral";
   ui.bubble = "";
   ui.floater = "";
-  ui.busy = false;
+  ui.phase = stillMotion() ? "here" : "entering";
+  ui.busy = ui.phase === "entering";
+  player.ding();
+  render();
+  if (ui.phase !== "entering") return;
+  later(() => {
+    if (ui.phase !== "entering") return;
+    ui.phase = "here";
+    ui.busy = false;
+    render();
+  }, WALK_MS);
 }
 
 function endSeason() {
@@ -219,35 +235,47 @@ function endSeason() {
   render();
 }
 
+function finishVisit() {
+  ui.busy = false;
+  ui.mood = "neutral";
+  ui.bubble = "";
+  ui.floater = "";
+  if (!state.season?.resolved) {
+    ui.phase = "here";
+    render();
+    return;
+  }
+  const step = takeResolution(state);
+  state = step.state;
+  if (step.done || seasonTimeUp(state.season)) {
+    endSeason();
+    return;
+  }
+  state = withOrder(state, rollOrder(state, Math.random));
+  save(state);
+  beginCustomer();
+}
+
 function settle(kind) {
   ui.busy = true;
+  ui.phase = "here";
   ui.mood = kind === "sold" ? "happy" : "sad";
   ui.bubble = kind === "sold" ? thanksLine(state.season?.sold || 0) : "Maybe next time!";
-  ui.floater = kind === "sold" ? `+${state.season?.lastPay || 0}` : "";
+  ui.floater = kind === "sold" ? state.season?.lastPay || 0 : "";
   if (kind === "sold") blip(660, 0.08);
   else blip(220, 0.1);
   save(state);
   render();
   later(() => {
-    ui.busy = false;
-    ui.mood = "neutral";
-    ui.bubble = "";
-    ui.floater = "";
-    if (!state.season?.resolved) {
-      render();
+    if (stillMotion()) {
+      finishVisit();
       return;
     }
-    const step = takeResolution(state);
-    state = step.state;
-    if (step.done || seasonTimeUp(state.season)) {
-      endSeason();
-      return;
-    }
-    state = withOrder(state, rollOrder(state, Math.random));
-    beginCustomer();
-    save(state);
+    ui.phase = "leaving";
+    player.ding();
     render();
-  }, kind === "sold" ? 680 : 780);
+    later(() => finishVisit(), WALK_MS);
+  }, kind === "sold" ? 650 : 560);
 }
 
 function onLeave() {
@@ -386,12 +414,11 @@ function enterPlay(forceTutorial) {
   ui.musicOpen = false;
   ui.idleHint = null;
   state = setPlate(state, { treat: null, topping: null });
-  beginCustomer();
   ui.tutorial = forceTutorial || !state.tutorialSeen ? { index: 0 } : null;
   ui.lastInput = performance.now();
   handKey = "";
   save(state);
-  render();
+  beginCustomer();
   return true;
 }
 
@@ -502,6 +529,15 @@ function handle(act, id) {
   if (act === "music-volume") {
     state = { ...state, musicVolume: id };
     player.setVolume(id);
+    save(state);
+    render();
+    return;
+  }
+  if (act === "sfx-toggle") {
+    const next = state.sfx === false;
+    state = { ...state, sfx: next };
+    player.setEffects(next);
+    if (next && !state.musicMuted) player.ding();
     save(state);
     render();
     return;
@@ -702,6 +738,7 @@ function musicSheet() {
     <div class="song-list">${songs}</div>
     <div class="btn-row">${volumes}</div>
     ${textBtn("music-mute", state.musicMuted ? "Sound is muted" : "Mute")}
+    ${textBtn("sfx-toggle", state.sfx === false ? "Effects are off" : "Effects are on")}
     ${textBtn("music-close", "Close", "btn-quiet")}
   </div></div>`;
 }
@@ -836,8 +873,11 @@ function renderPlay() {
     <div class="play-grid">
       <div class="scene" data-order-treat="${esc(order.treat)}" data-order-topping="${esc(order.topping)}" data-order-qty="${order.qty}">
         ${bakerySvg(state)}
+        <div class="bakery-door ${ui.phase === "entering" || ui.phase === "leaving" ? "is-open" : ""}" aria-hidden="true">
+          <div class="door-frame"><div class="door-slab"><span class="door-glass"></span><span class="door-knob"></span></div></div>
+        </div>
         <div class="actors">
-          <div class="customer ${esc(ui.mood)}">${customerSvg(customer, ui.mood)}</div>
+          <div class="customer ${esc(ui.phase || "here")} ${ui.phase === "here" ? esc(ui.mood) : ""}" data-phase="${esc(ui.phase || "here")}">${customerSvg(customer, ui.mood)}</div>
           <div class="bubble">
             <div class="order-art ${hint?.target === "order" ? "is-next" : ""}" data-hint="order">
               ${treatSvg(order.treat, order.topping, 104)}
@@ -1028,5 +1068,6 @@ ui.timeUp = seasonTimeUp(state.season);
 ui.lastInput = performance.now();
 player.setMuted(state.musicMuted);
 player.setVolume(state.musicVolume || "medium");
+player.setEffects(state.sfx !== false);
 render();
 requestAnimationFrame(frame);

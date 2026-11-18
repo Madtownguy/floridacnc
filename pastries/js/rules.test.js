@@ -5,7 +5,9 @@ import {
   addPlaytime,
   clockLabel,
   closeSeason,
+  describeOrder,
   formatDuration,
+  getTopping,
   getTreat,
   newGame,
   seasonClock,
@@ -132,11 +134,20 @@ test("music stays off until she picks a song, and the lesson is short", () => {
   const game = newGame();
   assert.equal(game.music, "off");
   assert.equal(game.musicMuted, false);
+  assert.equal(game.sfx, true);
   assert.equal(game.tutorialSeen, false);
-  assert.deepEqual(MUSIC_TRACKS.map((track) => track.id), ["sprinkle-party", "midnight-muffins", "flan-dance"]);
+  assert.deepEqual(MUSIC_TRACKS.map((track) => track.id), ["midnight-muffins", "cozy-cocoa", "sweet-flan-lullaby"]);
   assert.equal(MUSIC_TRACKS.some((track) => track.src), false);
   assert.ok(TUTORIAL_STEPS.length >= 3 && TUTORIAL_STEPS.length <= 5);
   assert.deepEqual(TUTORIAL_STEPS.map((step) => step.id), ["order", "treat", "topping", "serve", "clock"]);
+});
+
+test("vanilla is the plain topping name in labels and orders", () => {
+  const order = { treat: "cupcake", topping: "plain", qty: 1, customer: "sunny", vip: false };
+  const said = describeOrder(order);
+  assert.equal(said.line, "One vanilla cupcake, please!");
+  assert.equal(said.wanted, "a vanilla cupcake");
+  assert.equal(getTopping("plain").name, "Vanilla");
 });
 
 test("a shorter config still completes when saved time already passed it", () => {
