@@ -266,6 +266,27 @@ test("tutorial switch is saved and does not reset the bakery", () => {
   assert.equal(migrated.level, 2);
 });
 
+test("the home logo is saved and a bad value stays a cupcake", () => {
+  const game = newGame();
+  assert.deepEqual(game.logo, { kind: "treat", id: "cupcake" });
+  game.coins = 61;
+  game.logo = { kind: "drink", id: "flan" };
+  const store = memory();
+  save(game, store);
+  assert.deepEqual(load(store).logo, { kind: "treat", id: "cupcake" });
+  assert.equal(load(store).coins, 61);
+  game.logo = { kind: "drink", id: "hot-chocolate" };
+  save(game, store);
+  const loaded = load(store);
+  assert.deepEqual(loaded.logo, { kind: "drink", id: "hot-chocolate" });
+  assert.equal(loaded.coins, 61);
+  store.setItem(STORAGE_KEY, JSON.stringify({ v: 1, coins: 33, level: 4 }));
+  const old = load(store);
+  assert.deepEqual(old.logo, { kind: "treat", id: "cupcake" });
+  assert.equal(old.coins, 33);
+  assert.equal(old.level, 4);
+});
+
 test("baker name defaults to Madison and stays short", () => {
   assert.equal(cleanBakerName(""), "Madison");
   assert.equal(cleanBakerName("  sam  "), "sam");

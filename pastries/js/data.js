@@ -161,6 +161,20 @@ export const DRINKS = [
   { id: "chocolate-milk", name: "Chocolate Milk", with: "a chocolate milk", unlockLevel: 1, price: 4, needs: { milk: 1, chocolate: 1 } },
 ];
 
+/** Pictures she can use as the home-screen logo. kind is "treat" or "drink". */
+export const LOGOS = [
+  { kind: "treat", id: "cupcake", name: "Cupcake" },
+  { kind: "treat", id: "cookie", name: "Cookie" },
+  { kind: "treat", id: "donut", name: "Donut" },
+  { kind: "treat", id: "pie", name: "Pie" },
+  { kind: "treat", id: "cake", name: "Cake" },
+  { kind: "treat", id: "flan", name: "Flan" },
+  { kind: "drink", id: "coffee", name: "Coffee" },
+  { kind: "drink", id: "hot-chocolate", name: "Hot Chocolate" },
+  { kind: "drink", id: "milk", name: "Milk" },
+  { kind: "drink", id: "chocolate-milk", name: "Chocolate Milk" },
+];
+
 /** About one customer in three also asks for a drink, after the first lesson. */
 export const DRINK_ORDER_CHANCE = 0.3;
 

@@ -14,6 +14,7 @@ import {
   DRINKS,
   FEATURES,
   INGREDIENTS,
+  LOGOS,
   MUSIC_TRACKS,
   SEASON_PLAY_MS,
   SEASON_START_BONUS,
@@ -41,6 +42,7 @@ export function newGame() {
     tutorialOn: true,
     bakerName: "Madison",
     tutorialDone: false,
+    logo: { kind: "treat", id: "cupcake" },
     pantry: {
       flour: 8,
       sugar: 8,
@@ -131,12 +133,18 @@ export function normalize(data) {
     tutorialOn: data.tutorialOn !== false,
     bakerName: cleanBakerName(data.bakerName),
     tutorialDone: !!data.tutorialDone,
+    logo: validLogo(data.logo),
     pantry: { ...base.pantry, ...(data.pantry || {}) },
     upgrades: { ...base.upgrades, ...(data.upgrades || {}) },
     decor: { ...(data.decor || {}) },
     stats: { ...base.stats, ...(data.stats || {}) },
     season,
   };
+}
+
+function validLogo(logo) {
+  const match = LOGOS.find((item) => item.kind === logo?.kind && item.id === logo?.id);
+  return match ? { kind: match.kind, id: match.id } : { kind: "treat", id: "cupcake" };
 }
 
 function validMusic(id) {
