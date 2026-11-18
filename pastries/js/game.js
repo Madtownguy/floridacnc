@@ -153,7 +153,7 @@ function frame(now) {
       onLeave();
     }
   }
-  if (!ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !document.hidden) {
+  if (state.tutorialOn && !ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !document.hidden) {
     if (ui.lastInput && now - ui.lastInput > IDLE_MS) {
       const hint = idleHint();
       if (hint) {
@@ -454,7 +454,7 @@ function enterPlay(forceTutorial) {
   ui.musicOpen = false;
   ui.idleHint = null;
   state = setPlate(state, { treat: null, topping: null });
-  ui.tutorial = forceTutorial || !state.tutorialSeen ? { index: 0 } : null;
+  ui.tutorial = state.tutorialOn && (forceTutorial || !state.tutorialSeen) ? { index: 0 } : null;
   ui.lastInput = performance.now();
   handKey = "";
   save(state);
@@ -464,6 +464,7 @@ function enterPlay(forceTutorial) {
 }
 
 function activeHint() {
+  if (!state.tutorialOn) return null;
   if (ui.tutorial) {
     const step = tutorialStep();
     if (!step) return null;
@@ -621,7 +622,39 @@ function handle(act, id) {
     return;
   }
   if (act === "howto") {
+    if (!state.tutorialOn) {
+      if (ui.screen === "help") toast("Turn Tutorial on in Settings to see the taps.");
+      else openSub("help");
+      return;
+    }
     if (!enterPlay(true)) openSub("help");
+    return;
+  }
+  if (act === "tutorial-on") {
+    if (state.tutorialOn) return;
+    state = { ...state, tutorialOn: true, tutorialSeen: false };
+    ui.idleHint = null;
+    ui.tutorial = null;
+    save(state);
+    if (ui.returnTo === "play" && state.season && !seasonTimeUp(state.season)) {
+      state = setPlate(state, { treat: null, topping: null, drink: null, float: null, sips: [] });
+      ui.screen = "play";
+      ui.pause = false;
+      ui.tutorial = { index: 0 };
+      ui.lastInput = performance.now();
+      handKey = "";
+      save(state);
+    }
+    render();
+    return;
+  }
+  if (act === "tutorial-off") {
+    if (!state.tutorialOn && !ui.tutorial && !ui.idleHint) return;
+    state = { ...state, tutorialOn: false };
+    ui.tutorial = null;
+    ui.idleHint = null;
+    save(state);
+    render();
     return;
   }
   if (act === "start" && !state.season) {
@@ -1083,6 +1116,12 @@ function renderSettings() {
     <input id="baker-name" class="name-field" maxlength="${BAKER_NAME_LIMIT}" autocomplete="off" enterkeyhint="done" value="${esc(state.bakerName && String(state.bakerName).trim() ? nameOf() : "")}" placeholder="Madison">
     <p class="fine">Up to ${BAKER_NAME_LIMIT} letters. This name is on your bakery.</p>
     ${textBtn("save-name", "Save name", "btn-go")}
+    <p class="name-label">Tutorial</p>
+    <p class="fine">On shows the tapping tips. Off lets you bake right away.</p>
+    <div class="btn-row">
+      ${textBtn("tutorial-on", "On", state.tutorialOn ? "btn-go" : "")}
+      ${textBtn("tutorial-off", "Off", state.tutorialOn ? "" : "btn-go")}
+    </div>
   </section>`;
 }
 
