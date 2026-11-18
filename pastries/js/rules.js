@@ -184,7 +184,14 @@ export function clockLabel(playedMs, total = SEASON_PLAY_MS) {
     return `${bit} until your unlock`;
   }
   const minsLeft = Math.ceil(left / 60000);
-  if (played < 1000) return `${formatDuration(total)} season · ${minsLeft} min to go`;
+  if (played < 1000) {
+    const phrase = formatDuration(total)
+      .replace(/ minutes$/, "-minute")
+      .replace(/ minute$/, "-minute")
+      .replace(/ hours$/, "-hour")
+      .replace(/ hour$/, "-hour");
+    return `${phrase} season · ${minsLeft} min to go`;
+  }
   return `${minsLeft} min until your next unlock`;
 }
 
