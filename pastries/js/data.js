@@ -14,6 +14,16 @@
  */
 
 export const BAKER = "Madison";
+export const BAKER_NAME_LIMIT = 16;
+
+export function cleanBakerName(value) {
+  const text = String(value ?? "")
+    .replace(/[\u0000-\u001f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, BAKER_NAME_LIMIT);
+  return text || BAKER;
+}
 
 export const STORAGE_KEY = "pastries-and-more-v1";
 

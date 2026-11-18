@@ -3,7 +3,7 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { BAKER, INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, TREATS, TUTORIAL_STEPS } from "./data.js";
+import { INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, TREATS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
 import {
   badgeName,
   buy,
@@ -191,6 +191,10 @@ function onSeasonTimeUp() {
   save(state);
   blip(520, 0.12);
   render();
+}
+
+function nameOf() {
+  return cleanBakerName(state.bakerName);
 }
 
 function stillMotion() {
@@ -438,7 +442,7 @@ function idleHint() {
     return { target: "start", text: "Tap to start!" };
   }
   if (ui.screen === "results") return { target: "home", text: "Tap to go back!" };
-  if (ui.screen === "shop" || ui.screen === "recipes" || ui.screen === "help") {
+  if (ui.screen === "shop" || ui.screen === "recipes" || ui.screen === "help" || ui.screen === "settings") {
     return { target: "back", text: "Tap Back." };
   }
   if (ui.screen === "play" && state.season && !ui.pause) {
@@ -609,7 +613,7 @@ function handle(act, id) {
     render();
     return;
   }
-  if (act === "shop" || act === "recipes" || act === "help") {
+  if (act === "shop" || act === "recipes" || act === "help" || act === "settings") {
     openSub(act === "shop" ? "shop" : act);
     return;
   }
@@ -675,6 +679,13 @@ function handle(act, id) {
       save(state);
     }
     render();
+    return;
+  }
+  if (act === "save-name") {
+    const input = document.querySelector("#baker-name");
+    state = { ...state, bakerName: cleanBakerName(input ? input.value : state.bakerName) };
+    save(state);
+    toast(`Baker ${nameOf()}!`);
     return;
   }
   if (act === "ask-reset") {
@@ -766,8 +777,8 @@ function renderHome() {
   const lead = timeUp
     ? "Your Selling Season is full. A new unlock is waiting!"
     : inSeason
-      ? `Welcome back, ${BAKER}! Your minutes are still saved.`
-      : `Hi, ${BAKER}! The bakery is open.`;
+      ? `Welcome back, ${nameOf()}! Your minutes are still saved.`
+      : `Hi, ${nameOf()}! The bakery is open.`;
   const primary = timeUp
     ? textBtn("claim", "See my unlock", "btn-go", "", "claim")
     : inSeason
@@ -784,7 +795,7 @@ function renderHome() {
   return `<section class="screen home" data-screen="home">
     <div class="hero">${bakerySvg(state)}</div>
     <h1>Pastries and more!</h1>
-    <p class="tag">Baker ${esc(BAKER)}</p>
+    <p class="tag" data-baker-name>Baker ${esc(nameOf())}</p>
     <p class="lead">${esc(lead)}</p>
     <div class="pills">
       <span class="pill">${money(state.coins)}</span>
@@ -800,6 +811,7 @@ function renderHome() {
     </div>
     <div class="btn-row">
       ${textBtn("howto", "How to play")}
+      ${textBtn("settings", "Settings")}
       ${textBtn("music", "Music")}
     </div>
     <p class="next">${esc(nextUnlockText(state.level))}</p>
@@ -858,6 +870,7 @@ function renderPlay() {
       ${textBtn("shop", "Shop")}
       ${textBtn("recipes", "Recipes")}
       ${textBtn("howto", "How to play")}
+      ${textBtn("settings", "Settings")}
       ${textBtn("help", "Tips")}
       ${textBtn("save-home", "Save and come back later", "btn-quiet")}
     </div></div>` : "";
@@ -977,6 +990,16 @@ function renderRecipes() {
   </section>`;
 }
 
+function renderSettings() {
+  return `<section class="screen sub" data-screen="settings">
+    <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>Settings</h2></header>
+    <label class="name-label" for="baker-name">Baker name</label>
+    <input id="baker-name" class="name-field" maxlength="${BAKER_NAME_LIMIT}" autocomplete="off" enterkeyhint="done" value="${esc(state.bakerName && String(state.bakerName).trim() ? nameOf() : "")}" placeholder="Madison">
+    <p class="fine">Up to ${BAKER_NAME_LIMIT} letters. This name is on your bakery.</p>
+    ${textBtn("save-name", "Save name", "btn-go")}
+  </section>`;
+}
+
 function renderHelp() {
   const reset = ui.confirmReset
     ? `<div class="sheet inset">${textBtn("reset", "Yes, start over", "btn-go")}${textBtn("cancel-reset", "Keep my bakery")}</div>`
@@ -1026,6 +1049,7 @@ function render() {
   const screen = state.season && ui.screen === "play" ? renderPlay()
     : ui.screen === "shop" ? renderShop()
     : ui.screen === "recipes" ? renderRecipes()
+    : ui.screen === "settings" ? renderSettings()
     : ui.screen === "help" ? renderHelp()
     : ui.screen === "results" ? renderResults()
     : renderHome();
@@ -1043,10 +1067,17 @@ function render() {
 
 app.addEventListener("pointerdown", (event) => {
   ui.lastInput = performance.now();
+  if (ui.musicLive && state.music && state.music !== "off" && !state.musicMuted) player.resumeIfWanted();
   if (!ui.idleHint || event.target.closest(".hint-hand")) return;
   ui.idleHint = null;
   document.querySelector(".hint-hand")?.remove();
   document.querySelectorAll(".is-next").forEach((el) => el.classList.remove("is-next"));
+});
+
+app.addEventListener("input", (event) => {
+  if (event.target.id !== "baker-name") return;
+  state = { ...state, bakerName: String(event.target.value || "").slice(0, BAKER_NAME_LIMIT) };
+  save(state);
 });
 
 app.addEventListener("click", (event) => {
@@ -1055,12 +1086,19 @@ app.addEventListener("click", (event) => {
   handle(btn.dataset.act, btn.dataset.id || "");
 });
 
-document.addEventListener("visibilitychange", () => {
+function wakeMusic() {
   ui.lastNow = performance.now();
-  if (document.hidden) player.suspend();
-  else if (ui.musicLive && !state.musicMuted && state.music !== "off") player.resume();
-  save(state);
+  if (ui.musicLive && state.music && state.music !== "off" && !state.musicMuted) player.resumeIfWanted();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    player.prepareForBackground();
+    save(state);
+  } else wakeMusic();
 });
+window.addEventListener("pageshow", wakeMusic);
+window.addEventListener("focus", wakeMusic);
 window.addEventListener("pagehide", () => save(state));
 
 state = load();

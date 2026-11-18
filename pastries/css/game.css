@@ -584,7 +584,22 @@ h2, h3 { margin: 0; }
   align-items: center;
   gap: 8px;
 }
-.song small { font-weight: 700; color: var(--soft); }
+input, .name-field {
+  user-select: text;
+  -webkit-user-select: text;
+  font: inherit;
+  font-size: 16px;
+}
+.name-label { display: block; font-weight: 800; margin: 12px 0 6px; }
+.name-field {
+  width: 100%;
+  min-height: 52px;
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 8px 12px;
+  background: #fff;
+  color: var(--ink);
+}
 .song.is-on, .btn.is-on { background: #ffe0ee; }
 
 @media (prefers-reduced-motion: reduce) {
