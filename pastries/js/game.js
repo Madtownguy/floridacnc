@@ -3,7 +3,7 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
+import { INGREDIENTS, LOGOS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
 import {
   badgeName,
   buy,
@@ -195,6 +195,41 @@ function onSeasonTimeUp() {
   save(state);
   blip(520, 0.12);
   render();
+}
+
+function logoMarkup(logo, size) {
+  if (logo?.kind === "drink") return drinkSvg(logo.id, size);
+  const topping = logo?.id === "flan" ? "caramel" : logo?.id === "cake" ? "strawberry" : "plain";
+  return treatSvg(logo?.id || "cupcake", topping, size);
+}
+
+function applyTabIcon(logo) {
+  const markup = logoMarkup(logo, 180);
+  const blob = new Blob([markup], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 180;
+    canvas.height = 180;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#fff6ee";
+    ctx.fillRect(0, 0, 180, 180);
+    ctx.drawImage(image, 18, 18, 144, 144);
+    URL.revokeObjectURL(url);
+    const png = canvas.toDataURL("image/png");
+    let icon = document.querySelector('link[rel="icon"]');
+    if (!icon) {
+      icon = document.createElement("link");
+      icon.rel = "icon";
+      document.head.appendChild(icon);
+    }
+    icon.type = "image/png";
+    icon.href = png;
+  };
+  image.onerror = () => URL.revokeObjectURL(url);
+  image.src = url;
 }
 
 function nameOf() {
@@ -630,6 +665,15 @@ function handle(act, id) {
     if (!enterPlay(true)) openSub("help");
     return;
   }
+  if (act === "pick-logo") {
+    const [kind, logoId] = String(id).split(":");
+    if (!LOGOS.some((item) => item.kind === kind && item.id === logoId)) return;
+    state = { ...state, logo: { kind, id: logoId } };
+    save(state);
+    applyTabIcon(state.logo);
+    render();
+    return;
+  }
   if (act === "tutorial-on") {
     if (state.tutorialOn) return;
     state = { ...state, tutorialOn: true, tutorialSeen: false };
@@ -883,7 +927,10 @@ function renderHome() {
     </button>`;
   }).join("");
   return `<section class="screen home" data-screen="home">
-    <div class="hero">${bakerySvg(state)}</div>
+    <div class="hero">
+      ${bakerySvg(state)}
+      <div class="logo-badge" data-logo="${esc(state.logo?.kind || "treat")}:${esc(state.logo?.id || "cupcake")}">${logoMarkup(state.logo, 112)}</div>
+    </div>
     <h1>Pastries and more!</h1>
     <p class="tag" data-baker-name>Baker ${esc(nameOf())}</p>
     <p class="lead">${esc(lead)}</p>
@@ -1127,6 +1174,15 @@ function renderSettings() {
       ${textBtn("tutorial-on", "On", state.tutorialOn ? "btn-go" : "")}
       ${textBtn("tutorial-off", "Off", state.tutorialOn ? "" : "btn-go")}
     </div>
+    <p class="name-label">Logo</p>
+    <p class="fine">This picture sits on the home screen.</p>
+    <div class="logo-grid">${LOGOS.map((item) => {
+      const on = state.logo?.kind === item.kind && state.logo?.id === item.id;
+      return `<button type="button" class="choice ${on ? "is-on" : ""}" data-act="pick-logo" data-id="${item.kind}:${item.id}" aria-pressed="${on}">
+        ${item.kind === "drink" ? drinkSvg(item.id, 56) : treatSvg(item.id, item.id === "flan" ? "caramel" : "plain", 56)}
+        <span class="name">${esc(item.name)}</span>
+      </button>`;
+    }).join("")}</div>
   </section>`;
 }
 
@@ -1256,6 +1312,7 @@ window.addEventListener("focus", wakeMusic);
 window.addEventListener("pagehide", () => save(state));
 
 state = load();
+applyTabIcon(state.logo);
 ui.timeUp = seasonTimeUp(state.season);
 ui.lastInput = performance.now();
 player.setMuted(state.musicMuted);
