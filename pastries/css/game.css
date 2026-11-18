@@ -304,8 +304,12 @@ h2, h3 { margin: 0; }
 }
 .bubble p { margin: 0; font-weight: 800; line-height: 1.15; }
 .bubble small { color: var(--soft); font-weight: 800; }
-.order-art { flex: none; border-radius: 18px; }
-.bubble svg, .order-art svg { width: 104px; height: 104px; flex: none; }
+.order-art { flex: none; border-radius: 18px; display: flex; align-items: center; gap: 2px; }
+.bubble svg, .order-art svg { width: 88px; height: 88px; flex: none; }
+.order-art.has-drink svg { width: 72px; height: 72px; }
+.row-label { margin: 2px 0 0; font-size: 0.78rem; font-weight: 800; color: var(--soft); }
+.drink-choice { width: 84px; min-height: 72px; padding: 4px; }
+.drink-choice svg { width: 40px; height: 40px; }
 .bubble.is-next { animation: next-pulse 1s ease-in-out infinite; }
 .floater {
   position: absolute;
@@ -357,7 +361,9 @@ h2, h3 { margin: 0; }
 }
 .plate-row strong, .plate-row span { display: block; }
 .plate-row .need { color: #a85b00; }
+.plate { display: flex; align-items: center; }
 .plate svg { width: 72px; height: 72px; display: block; }
+.plate .sip svg { width: 52px; height: 52px; margin-left: -8px; }
 .coach {
   margin: 0 0 6px;
   background: #fff7c8;
@@ -478,6 +484,15 @@ h2, h3 { margin: 0; }
   padding: 12px;
   font-weight: 800;
   box-shadow: var(--shadow);
+}
+
+@media (max-width: 520px) and (orientation: portrait) {
+  .dock { max-height: 70%; }
+  .choice { width: 84px; min-height: 80px; }
+  .choice svg { width: 42px; height: 42px; }
+  .drink-choice { min-height: 68px; }
+  .plate-row { padding: 4px; }
+  .plate svg { width: 60px; height: 60px; }
 }
 
 @media (orientation: landscape) {

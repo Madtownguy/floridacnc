@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, cleanBakerName } from "./data.js";
+import { DRINK_ORDER_CHANCE, DRINKS, MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
   clockLabel,
@@ -10,6 +10,7 @@ import {
   getTopping,
   getTreat,
   newGame,
+  rollOrder,
   seasonClock,
   seasonTimeUp,
   seasonUnlocks,
@@ -222,4 +223,75 @@ test("a shorter config still completes when saved time already passed it", () =>
   const step = addPlaytime(state, 0, fiveMinutes);
   assert.equal(step.timeUp, true);
   assert.equal(step.justFinished, false);
+});
+
+test("drinks are optional, priced, and old saves keep their coins", () => {
+  assert.equal(DRINK_ORDER_CHANCE, 0.3);
+  assert.deepEqual(DRINKS.map((drink) => drink.unlockLevel), [1, 1, 1, 1]);
+  assert.equal(tutorialOrder().drink, null);
+  const said = describeOrder({ treat: "cupcake", topping: "plain", qty: 1, customer: "sunny", drink: "milk" });
+  assert.equal(said.line, "One vanilla cupcake and milk, please!");
+  const fresh = { ...newGame(), tutorialDone: true };
+  const seq = [0, 0, 0, 0, 0, 0.1, 0, 0];
+  let n = 0;
+  const withDrink = rollOrder(fresh, () => seq[n++] ?? 0);
+  assert.equal(withDrink.drink, "coffee");
+  n = 0;
+  const quiet = [0, 0, 0, 0, 0, 0.95];
+  const noDrink = rollOrder(fresh, () => quiet[n++] ?? 0);
+  assert.equal(noDrink.drink, null);
+  const learning = rollOrder(newGame(), () => 0);
+  assert.equal(learning.drink, null);
+
+  let state = startSeason(newGame(), () => 0);
+  state = {
+    ...state,
+    season: {
+      ...state.season,
+      order: { ...state.season.order, drink: "milk" },
+      plate: { treat: "cupcake", topping: "strawberry", drink: null },
+    },
+  };
+  assert.equal(tryServe(state).result, "need-drink");
+  state = { ...state, season: { ...state.season, plate: { treat: "cupcake", topping: "strawberry", drink: "coffee" } } };
+  const wrong = tryServe(state);
+  assert.equal(wrong.result, "mismatch");
+  assert.equal(wrong.state.pantry.milk, state.pantry.milk);
+  state = { ...state, season: { ...state.season, plate: { treat: "cupcake", topping: "strawberry", drink: "milk" } } };
+  const sold = tryServe(state, { fast: false });
+  assert.equal(sold.result, "match");
+  assert.equal(sold.pay, 8 + 2 + 3);
+  assert.equal(sold.state.pantry.milk, state.pantry.milk - 1);
+  assert.equal(sold.state.coins, state.coins + sold.pay);
+
+  const old = {
+    v: 1,
+    coins: 77,
+    level: 3,
+    bakerName: "Pip",
+    music: "cozy-cocoa",
+    musicVolume: "soft",
+    season: {
+      playedMs: 120000,
+      earned: 15,
+      bonusPaid: true,
+      order: { treat: "cookie", topping: "plain", qty: 1, customer: "sunny", vip: false },
+      plate: { treat: "cookie", topping: "plain" },
+    },
+  };
+  const store = memory();
+  store.setItem(STORAGE_KEY, JSON.stringify(old));
+  const loaded = load(store);
+  assert.equal(loaded.coins, 77);
+  assert.equal(loaded.level, 3);
+  assert.equal(loaded.bakerName, "Pip");
+  assert.equal(loaded.music, "cozy-cocoa");
+  assert.equal(loaded.musicVolume, "soft");
+  assert.equal(loaded.season.playedMs, 120000);
+  assert.equal(loaded.season.earned, 15);
+  assert.equal(loaded.season.bonusPaid, true);
+  assert.equal(loaded.season.order.treat, "cookie");
+  assert.equal(loaded.season.order.drink, null);
+  assert.equal(loaded.season.plate.drink, null);
+  assert.equal(loaded.pantry.milk, newGame().pantry.milk);
 });

@@ -3,22 +3,23 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
+import { INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
 import {
   badgeName,
   buy,
-  canMake,
   closeSeason,
   describeNeeds,
   describeOrder,
   formatDuration,
   getCustomer,
+  getDrink,
   getTopping,
   getTreat,
   markLeave,
   missingIngredients,
   newGame,
   nextUnlockText,
+  orderNeeds,
   patienceMaxMs,
   rollOrder,
   seasonClock,
@@ -41,7 +42,7 @@ import {
 } from "./rules.js";
 import { createPlayer } from "./music.js";
 import { load, save } from "./state.js";
-import { bakerySvg, coinSvg, customerSvg, emptyPlateSvg, hintHandSvg, toppingSvg, treatSvg } from "./view.js";
+import { bakerySvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, hintHandSvg, toppingSvg, treatSvg } from "./view.js";
 
 const IDLE_MS = 4500;
 const WALK_MS = 900;
@@ -296,6 +297,10 @@ function onServe() {
     toast(state.season.plate?.treat ? "Now pick a topping!" : "Pick a treat first!");
     return;
   }
+  if (out.result === "need-drink") {
+    toast("Tap their drink too!");
+    return;
+  }
   if (out.result === "short") {
     const names = out.missing.map((item) => item.name.toLowerCase()).join(", ");
     toast(`You need ${names}. The shop can help!`);
@@ -348,6 +353,7 @@ function pickTreat(id) {
   state = setPlate(state, {
     treat: turningOff ? null : id,
     topping: turningOff ? null : (stillOk ? plate.topping : null),
+    drink: turningOff ? null : (plate.drink || null),
   });
   if (state.season.plate.treat === state.season.order.treat) maybeAdvance("treat");
   save(state);
@@ -376,8 +382,31 @@ function pickTopping(id) {
   state = setPlate(state, {
     treat: plate.treat,
     topping: plate.topping === id ? null : id,
+    drink: plate.drink || null,
   });
   if (state.season.plate.treat === state.season.order.treat && state.season.plate.topping === state.season.order.topping) maybeAdvance("topping");
+  save(state);
+  render();
+}
+
+function pickDrink(id) {
+  if (ui.busy || !state.season?.order) return;
+  const drink = getDrink(id);
+  if (!drink) return;
+  if (drink.unlockLevel > state.level) {
+    toast(`${drink.name} unlocks at level ${drink.unlockLevel}.`);
+    return;
+  }
+  if (!state.season.order.drink) {
+    toast("No drink this time!");
+    return;
+  }
+  const plate = state.season.plate || {};
+  state = setPlate(state, {
+    treat: plate.treat || null,
+    topping: plate.topping || null,
+    drink: plate.drink === id ? null : id,
+  });
   save(state);
   render();
 }
@@ -452,11 +481,12 @@ function idleHint() {
     if (ui.timeUp) return { target: "claim", text: "Tap for your unlock!" };
     const order = state.season.order;
     const plate = state.season.plate || {};
-    if (order && !canMake(state.pantry, order.treat, order.topping, order.qty || 1)) {
+    if (order && missingIngredients(state.pantry, orderNeeds(order)).length) {
       return { target: "shop", text: "Tap Shop to buy." };
     }
     if (!plate.treat) return { target: "treat", text: "Tap this treat." };
     if (!plate.topping) return { target: "topping", text: "Tap this topping." };
+    if (order?.drink && plate.drink !== order.drink) return { target: "drink", text: "Tap this drink." };
     return { target: "serve", text: "Tap Serve!" };
   }
   return null;
@@ -474,7 +504,13 @@ function placeHand() {
   const key = `${hand.dataset.target}:${ui.tutorial ? ui.tutorial.index : "idle"}`;
   if (key !== handKey) {
     handKey = key;
-    target.scrollIntoView({ block: "nearest", inline: "center" });
+    const scroller = target.closest(".dock-main");
+    if (scroller) {
+      const item = target.getBoundingClientRect();
+      const frame = scroller.getBoundingClientRect();
+      if (item.top < frame.top + 4) scroller.scrollTop -= frame.top - item.top + 8;
+      else if (item.bottom > frame.bottom - 4) scroller.scrollTop += item.bottom - frame.bottom + 8;
+    }
   }
   const box = target.getBoundingClientRect();
   const appBox = app.getBoundingClientRect();
@@ -636,6 +672,10 @@ function handle(act, id) {
   }
   if (act === "pick-topping") {
     pickTopping(id);
+    return;
+  }
+  if (act === "pick-drink") {
+    pickDrink(id);
     return;
   }
   if (act === "clear" && state.season && !ui.busy) {
@@ -830,7 +870,7 @@ function renderPlay() {
   const described = describeOrder(order);
   const plate = season.plate || { treat: null, topping: null };
   const line = ui.bubble || described.line;
-  const canFill = canMake(state.pantry, order.treat, order.topping, order.qty);
+  const canFill = missingIngredients(state.pantry, orderNeeds(order)).length === 0;
   const hint = activeHint();
   const treats = TREATS.map((treat) => {
     const locked = treat.unlockLevel > state.level;
@@ -853,11 +893,23 @@ function renderPlay() {
       <span class="name">${esc(top.name)}</span>
     </button>`;
   }).join("");
-  const needs = plate.treat && plate.topping
-    ? describeNeeds(totalNeeds(plate.treat, plate.topping, order.qty))
-    : "Pick a treat and a topping";
-  const missing = plate.treat && plate.topping
-    ? missingIngredients(state.pantry, totalNeeds(plate.treat, plate.topping, order.qty))
+  const drinks = DRINKS.map((drink) => {
+    const locked = drink.unlockLevel > state.level;
+    const on = plate.drink === drink.id;
+    const guide = drink.id === order.drink;
+    const next = guide && hint?.target === "drink" ? " is-next" : "";
+    return `<button type="button" class="choice drink-choice ${on ? "is-on" : ""} ${locked ? "is-locked" : ""}${next}" data-act="pick-drink" data-id="${drink.id}" ${guide ? 'data-hint="drink"' : ""} aria-pressed="${on}">
+      ${drinkSvg(drink.id, 48)}
+      <span class="name">${esc(drink.name)}</span>
+      ${locked ? `<em>Lv ${drink.unlockLevel}</em>` : ""}
+    </button>`;
+  }).join("");
+  const drinkReady = !order.drink || plate.drink;
+  const needs = plate.treat && plate.topping && drinkReady
+    ? describeNeeds(totalNeeds(plate.treat, plate.topping, order.qty, plate.drink))
+    : (plate.treat && plate.topping && order.drink ? "Tap their drink" : "Pick a treat and a topping");
+  const missing = plate.treat && plate.topping && drinkReady
+    ? missingIngredients(state.pantry, totalNeeds(plate.treat, plate.topping, order.qty, plate.drink))
     : [];
   const needNote = missing.length
     ? `Need ${missing.map((item) => `${item.short} ${item.name.toLowerCase()}`).join(", ")}`
@@ -887,7 +939,7 @@ function renderPlay() {
     </header>
     ${seasonMeter()}
     <div class="play-grid">
-      <div class="scene" data-order-treat="${esc(order.treat)}" data-order-topping="${esc(order.topping)}" data-order-qty="${order.qty}">
+      <div class="scene" data-order-treat="${esc(order.treat)}" data-order-topping="${esc(order.topping)}" data-order-drink="${esc(order.drink || "")}" data-order-qty="${order.qty}">
         ${bakerySvg(state)}
         <div class="bakery-door ${ui.phase === "entering" || ui.phase === "leaving" ? "is-open" : ""}" aria-hidden="true">
           <div class="door-frame"><div class="door-slab"><span class="door-glass"></span><span class="door-knob"></span></div></div>
@@ -895,8 +947,9 @@ function renderPlay() {
         <div class="actors">
           <div class="customer ${esc(ui.phase || "here")} ${ui.phase === "here" ? esc(ui.mood) : ""}" data-phase="${esc(ui.phase || "here")}">${customerSvg(customer, ui.mood)}</div>
           <div class="bubble">
-            <div class="order-art ${hint?.target === "order" ? "is-next" : ""}" data-hint="order">
+            <div class="order-art ${order.drink ? "has-drink" : ""} ${hint?.target === "order" ? "is-next" : ""}" data-hint="order">
               ${treatSvg(order.treat, order.topping, 104)}
+              ${order.drink ? drinkSvg(order.drink, 88) : ""}
             </div>
             <div>
               <p>${esc(line)}</p>
@@ -912,10 +965,14 @@ function renderPlay() {
         <div class="dock-main">
           ${timeBanner}
           <div class="plate-row">
-            <div class="plate">${plate.treat ? treatSvg(plate.treat, plate.topping || "plain", 78) : emptyPlateSvg(78)}</div>
+            <div class="plate">
+              ${plate.treat ? treatSvg(plate.treat, plate.topping || "plain", 78) : emptyPlateSvg(78)}
+              ${plate.drink ? `<span class="sip">${drinkSvg(plate.drink, 56)}</span>` : ""}
+            </div>
             <div>
               <strong>${plate.treat ? esc(getTreat(plate.treat).name) : "Your tray"}</strong>
               <span>${plate.topping ? esc(getTopping(plate.topping).name) : "No topping yet"}</span>
+              ${plate.drink ? `<span>${esc(getDrink(plate.drink).name)}</span>` : ""}
               <span class="${missing.length ? "need" : ""}">${esc(needNote)}</span>
             </div>
           </div>
@@ -923,6 +980,8 @@ function renderPlay() {
           <div class="scroller" data-scroller="toppings">${toppings}</div>
           ${canFill ? "" : textBtn("let-go", "Let them go kindly", "btn-quiet wide")}
         </div>
+        <p class="row-label">Drinks</p>
+        <div class="scroller" data-scroller="drinks">${drinks}</div>
         ${pantryHtml()}
         <div class="serve-row">
           ${ui.tutorial ? "" : textBtn("clear", "Clear", "btn-ghost")}
@@ -987,9 +1046,23 @@ function renderRecipes() {
       </div>
     </article>`;
   }).join("");
+  const drinkBlocks = DRINKS.map((drink) => {
+    const locked = drink.unlockLevel > state.level;
+    const needs = describeNeeds(drink.needs);
+    return `<article class="recipe ${locked ? "is-locked" : ""}">
+      ${drinkSvg(drink.id, 84)}
+      <div>
+        <h3>${esc(drink.name)} ${locked ? `<em>Level ${drink.unlockLevel}</em>` : ""}</h3>
+        <p>${esc(needs || "Ready to pour")}</p>
+        <p class="sub">${money(drink.price)}</p>
+      </div>
+    </article>`;
+  }).join("");
   return `<section class="screen sub" data-screen="recipes">
     <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>Recipes</h2></header>
     ${blocks}
+    <h2>Drinks</h2>
+    ${drinkBlocks}
   </section>`;
 }
 
@@ -1011,7 +1084,7 @@ function renderHelp() {
     <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>How to play</h2></header>
     <ol class="steps">
       <li><b>1.</b> Read the customer's bubble. The picture is the order.</li>
-      <li><b>2.</b> Tap that treat, tap the topping, then tap Serve.</li>
+      <li><b>2.</b> Tap that treat, tap the topping, then tap Serve. If they want a drink, tap it too.</li>
       <li><b>3.</b> A happy customer pays ${coinSvg(22)} Ingredients stay if the order is wrong.</li>
       <li><b>4.</b> A Selling Season is ${esc(formatDuration(SEASON_PLAY_MS))} of baking and shopping. Leave whenever you want. The minutes are saved, and they add up.</li>
       <li><b>5.</b> When the season timer fills, you unlock something new. The bakery never closes.</li>
