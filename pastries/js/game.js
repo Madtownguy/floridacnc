@@ -3,7 +3,7 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { BAKER, INGREDIENTS, SEASON_PLAY_MS, TREATS } from "./data.js";
+import { BAKER, INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, TREATS, TUTORIAL_STEPS } from "./data.js";
 import {
   badgeName,
   buy,
@@ -39,16 +39,20 @@ import {
   AWNINGS,
   TOPPINGS,
 } from "./rules.js";
+import { createPlayer } from "./music.js";
 import { load, save } from "./state.js";
-import { bakerySvg, customerSvg, emptyPlateSvg, toppingSvg, treatSvg } from "./view.js";
+import { bakerySvg, coinSvg, customerSvg, emptyPlateSvg, hintHandSvg, toppingSvg, treatSvg } from "./view.js";
+
+const IDLE_MS = 4500;
+const player = createPlayer(MUSIC_TRACKS);
 
 const app = document.querySelector("#app");
 let state = newGame();
 let ui = freshUi();
 let timer = 0;
 let timerToken = 0;
-let audioCtx = null;
 let saveAccum = 0;
+let handKey = "";
 
 function freshUi() {
   return {
@@ -63,11 +67,17 @@ function freshUi() {
     bubble: "",
     floater: "",
     toast: "",
+    toastHtml: false,
     toastId: 0,
     results: null,
     patienceMs: 20000,
     patienceMax: 20000,
     lastNow: 0,
+    lastInput: 0,
+    tutorial: null,
+    idleHint: null,
+    musicOpen: false,
+    musicLive: false,
   };
 }
 
@@ -91,36 +101,22 @@ function cancelLater() {
   clearTimeout(timer);
 }
 
-function toast(message) {
+function toast(message, html = false) {
   ui.toast = message;
+  ui.toastHtml = html;
   const id = ++ui.toastId;
   render();
   setTimeout(() => {
     if (ui.toastId === id) {
       ui.toast = "";
+      ui.toastHtml = false;
       render();
     }
   }, 2200);
 }
 
 function blip(freq, dur) {
-  if (!state.sound) return;
-  try {
-    audioCtx = audioCtx || new AudioContext();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.frequency.value = freq;
-    osc.type = "sine";
-    gain.gain.value = 0.03;
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
-    osc.stop(audioCtx.currentTime + dur);
-  } catch {
-    /* Audio is optional and stays quiet. */
-  }
+  player.blip(freq, dur);
 }
 
 function clockRunning() {
@@ -151,8 +147,18 @@ function frame(now) {
       onLeave();
     }
   }
+  if (!ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !document.hidden) {
+    if (ui.lastInput && now - ui.lastInput > IDLE_MS) {
+      const hint = idleHint();
+      if (hint) {
+        ui.idleHint = hint;
+        render();
+      }
+    }
+  }
   paintPatience();
   paintClock();
+  placeHand();
   requestAnimationFrame(frame);
 }
 
@@ -285,7 +291,9 @@ function onServe() {
     return;
   }
   if (out.result !== "match") return;
+  const teachServe = tutorialStep()?.waitFor === "serve";
   state = { ...out.state, tutorialDone: true };
+  if (teachServe) nextTutorial();
   settle("sold");
 }
 
@@ -298,12 +306,18 @@ function pickTreat(id) {
     return;
   }
   const plate = state.season.plate || { treat: null, topping: null };
+  if (tutorialStep()?.waitFor === "treat" && id === state.season.order.treat && plate.treat === id) {
+    nextTutorial();
+    render();
+    return;
+  }
   const turningOff = plate.treat === id;
   const stillOk = plate.topping && toppingsFor(id, state.level).some((top) => top.id === plate.topping);
   state = setPlate(state, {
     treat: turningOff ? null : id,
     topping: turningOff ? null : (stillOk ? plate.topping : null),
   });
+  if (state.season.plate.treat === state.season.order.treat) maybeAdvance("treat");
   save(state);
   render();
 }
@@ -313,6 +327,11 @@ function pickTopping(id) {
   const plate = state.season.plate || { treat: null, topping: null };
   if (!plate.treat) {
     toast("Pick a treat first!");
+    return;
+  }
+  if (tutorialStep()?.waitFor === "topping" && id === state.season.order.topping && plate.topping === id) {
+    nextTutorial();
+    render();
     return;
   }
   const allowed = toppingsFor(plate.treat, state.level);
@@ -326,8 +345,113 @@ function pickTopping(id) {
     treat: plate.treat,
     topping: plate.topping === id ? null : id,
   });
+  if (state.season.plate.treat === state.season.order.treat && state.season.plate.topping === state.season.order.topping) maybeAdvance("topping");
   save(state);
   render();
+}
+
+function tutorialStep() {
+  if (!ui.tutorial) return null;
+  return TUTORIAL_STEPS[ui.tutorial.index] || null;
+}
+
+function nextTutorial() {
+  if (!ui.tutorial) return;
+  const next = ui.tutorial.index + 1;
+  if (next >= TUTORIAL_STEPS.length) {
+    ui.tutorial = null;
+    state = { ...state, tutorialSeen: true };
+    save(state);
+  } else {
+    ui.tutorial = { index: next };
+  }
+  ui.idleHint = null;
+  ui.lastInput = performance.now();
+  handKey = "";
+}
+
+function maybeAdvance(waitFor) {
+  if (tutorialStep()?.waitFor === waitFor) nextTutorial();
+}
+
+function enterPlay(forceTutorial) {
+  if (seasonTimeUp(state.season)) return false;
+  if (!state.season) {
+    state = startSeason(state, Math.random);
+    ui.timeUp = false;
+  }
+  if (!state.season.order) state = withOrder(state, rollOrder(state, Math.random));
+  ui.screen = "play";
+  ui.pause = false;
+  ui.musicOpen = false;
+  ui.idleHint = null;
+  state = setPlate(state, { treat: null, topping: null });
+  beginCustomer();
+  ui.tutorial = forceTutorial || !state.tutorialSeen ? { index: 0 } : null;
+  ui.lastInput = performance.now();
+  handKey = "";
+  save(state);
+  render();
+  return true;
+}
+
+function activeHint() {
+  if (ui.tutorial) {
+    const step = tutorialStep();
+    if (!step) return null;
+    return { target: step.id, text: step.text, cta: step.waitFor ? "" : (step.cta || "Next"), tutorial: true };
+  }
+  return ui.idleHint;
+}
+
+function idleHint() {
+  if (ui.screen === "home") {
+    if (seasonTimeUp(state.season)) return { target: "claim", text: "Tap for your unlock!" };
+    if (state.season) return { target: "continue", text: "Tap to keep baking!" };
+    return { target: "start", text: "Tap to start!" };
+  }
+  if (ui.screen === "results") return { target: "home", text: "Tap to go back!" };
+  if (ui.screen === "shop" || ui.screen === "recipes" || ui.screen === "help") {
+    return { target: "back", text: "Tap Back." };
+  }
+  if (ui.screen === "play" && state.season && !ui.pause) {
+    if (ui.timeUp) return { target: "claim", text: "Tap for your unlock!" };
+    const order = state.season.order;
+    const plate = state.season.plate || {};
+    if (order && !canMake(state.pantry, order.treat, order.topping, order.qty || 1)) {
+      return { target: "shop", text: "Tap Shop to buy." };
+    }
+    if (!plate.treat) return { target: "treat", text: "Tap this treat." };
+    if (!plate.topping) return { target: "topping", text: "Tap this topping." };
+    return { target: "serve", text: "Tap Serve!" };
+  }
+  return null;
+}
+
+function placeHand() {
+  const hand = document.querySelector(".hint-hand");
+  if (!hand) return;
+  const target = document.querySelector(`[data-hint="${hand.dataset.target}"]`);
+  if (!target) {
+    hand.hidden = true;
+    return;
+  }
+  hand.hidden = false;
+  const key = `${hand.dataset.target}:${ui.tutorial ? ui.tutorial.index : "idle"}`;
+  if (key !== handKey) {
+    handKey = key;
+    target.scrollIntoView({ block: "nearest", inline: "center" });
+  }
+  const box = target.getBoundingClientRect();
+  const appBox = app.getBoundingClientRect();
+  const x = Math.max(36, Math.min(appBox.width - 36, box.left + box.width / 2 - appBox.left));
+  const point = box.top + box.height * 0.55 - appBox.top;
+  const below = point < 130;
+  hand.classList.toggle("is-below", below);
+  hand.style.left = `${x}px`;
+  hand.style.top = `${point}px`;
+  const banner = document.querySelector(".hint-banner");
+  if (banner) banner.classList.toggle("is-top", box.top > appBox.top + appBox.height * 0.5);
 }
 
 function openSub(screen) {
@@ -346,30 +470,78 @@ function goBack() {
 }
 
 function handle(act, id) {
-  if (act === "toggle-sound") {
-    state = { ...state, sound: !state.sound };
-    save(state);
-    if (state.sound) blip(660, 0.08);
+  ui.lastInput = performance.now();
+  if (ui.idleHint && act !== "tutorial-next" && act !== "tutorial-skip") ui.idleHint = null;
+  if (act === "music") {
+    ui.musicOpen = !ui.musicOpen;
+    ui.pause = false;
     render();
+    return;
+  }
+  if (act === "music-close") {
+    ui.musicOpen = false;
+    render();
+    return;
+  }
+  if (act === "music-pick") {
+    if (id === "off") {
+      player.stop();
+      state = { ...state, music: "off" };
+      ui.musicLive = false;
+    } else {
+      player.setMuted(false);
+      player.setVolume(state.musicVolume || "medium");
+      player.start(id);
+      state = { ...state, music: id, musicMuted: false };
+      ui.musicLive = true;
+    }
+    save(state);
+    render();
+    return;
+  }
+  if (act === "music-volume") {
+    state = { ...state, musicVolume: id };
+    player.setVolume(id);
+    save(state);
+    render();
+    return;
+  }
+  if (act === "music-mute") {
+    const muted = !state.musicMuted;
+    state = { ...state, musicMuted: muted };
+    player.setMuted(muted);
+    if (!muted && state.music && state.music !== "off" && !ui.musicLive) {
+      player.setVolume(state.musicVolume || "medium");
+      player.start(state.music);
+      ui.musicLive = true;
+    }
+    save(state);
+    render();
+    return;
+  }
+  if (act === "tutorial-next") {
+    nextTutorial();
+    render();
+    return;
+  }
+  if (act === "tutorial-skip") {
+    ui.tutorial = null;
+    state = { ...state, tutorialSeen: true };
+    ui.lastInput = performance.now();
+    save(state);
+    render();
+    return;
+  }
+  if (act === "howto") {
+    if (!enterPlay(true)) openSub("help");
     return;
   }
   if (act === "start" && !state.season) {
-    state = startSeason(state, Math.random);
-    ui.timeUp = false;
-    ui.screen = "play";
-    ui.pause = false;
-    beginCustomer();
-    save(state);
-    render();
+    enterPlay(false);
     return;
   }
   if (act === "continue" && state.season && !seasonTimeUp(state.season)) {
-    ui.screen = "play";
-    ui.pause = false;
-    if (!state.season.order) state = withOrder(state, rollOrder(state, Math.random));
-    beginCustomer();
-    save(state);
-    render();
+    enterPlay(false);
     return;
   }
   if (act === "claim") {
@@ -448,7 +620,7 @@ function handle(act, id) {
   if (act === "buy") {
     const result = buy(state, id);
     state = result.state;
-    if (!result.ok && result.reason === "coins") toast(`You need ${result.need} more coins.`);
+    if (!result.ok && result.reason === "coins") toast(`You need ${result.need} more ${coinSvg(18)}`, true);
     else if (!result.ok && result.reason === "owned") toast("Already in your bakery!");
     else if (result.ok) {
       toast(`${result.item.name} is yours!`);
@@ -480,21 +652,64 @@ function handle(act, id) {
     return;
   }
   if (act === "reset") {
+    player.stop();
     state = newGame();
     ui = freshUi();
+    ui.lastInput = performance.now();
     save(state);
     render();
   }
 }
 
-function textBtn(act, label, cls = "", id = "") {
+function textBtn(act, label, cls = "", id = "", hint = "") {
   const idAttr = id ? ` data-id="${esc(id)}"` : "";
-  return `<button type="button" class="btn ${cls}" data-act="${esc(act)}"${idAttr}>${esc(label)}</button>`;
+  const hintAttr = hint ? ` data-hint="${esc(hint)}"` : "";
+  const next = hint && activeHint()?.target === hint ? " is-next" : "";
+  return `<button type="button" class="btn ${cls}${next}" data-act="${esc(act)}"${idAttr}${hintAttr}>${esc(label)}</button>`;
+}
+
+function money(amount, size = 18) {
+  return `<span class="money" aria-label="${amount}">${coinSvg(size)}<b>${amount}</b></span>`;
+}
+
+function hintBox() {
+  const hint = activeHint();
+  if (!hint) return "";
+  const showCoin = hint.target === "serve" || hint.target === "clock";
+  const cta = hint.cta ? `<button type="button" class="btn btn-go hint-next" data-act="tutorial-next">${esc(hint.cta)}</button>` : "";
+  const skip = hint.tutorial ? `<button type="button" class="btn btn-quiet hint-skip" data-act="tutorial-skip">Skip</button>` : "";
+  const actions = cta || skip ? `<div class="hint-actions">${cta}${skip}</div>` : "";
+  return `<div class="hint-banner"><div class="hint-label"><p>${esc(hint.text)}</p>${showCoin ? coinSvg(22) : ""}${actions}</div></div>
+    <div class="hint-hand" data-target="${esc(hint.target)}">${hintHandSvg()}</div>`;
+}
+
+function musicSheet() {
+  if (!ui.musicOpen) return "";
+  const songs = [{ id: "off", name: "Off", feel: "Quiet" }, ...MUSIC_TRACKS].map((track) => {
+    const on = state.music === track.id;
+    const waiting = on && track.id !== "off" && !ui.musicLive;
+    return `<button type="button" class="btn song ${on ? "is-on" : ""}" data-act="music-pick" data-id="${track.id}">
+      <span>${esc(track.name)}</span>
+      <small>${esc(waiting ? "Tap to play" : track.feel)}</small>
+    </button>`;
+  }).join("");
+  const volumes = MUSIC_VOLUMES.map((item) =>
+    `<button type="button" class="btn ${state.musicVolume === item.id ? "is-on" : ""}" data-act="music-volume" data-id="${item.id}">${esc(item.label)}</button>`
+  ).join("");
+  return `<div class="overlay"><div class="sheet">
+    <h2>Music</h2>
+    <p>Pick a song. It stays quiet until you tap one.</p>
+    <div class="song-list">${songs}</div>
+    <div class="btn-row">${volumes}</div>
+    ${textBtn("music-mute", state.musicMuted ? "Sound is muted" : "Mute")}
+    ${textBtn("music-close", "Close", "btn-quiet")}
+  </div></div>`;
 }
 
 function seasonMeter(extraClass = "") {
   const clock = seasonClock(state.season);
-  return `<div class="season-meter ${extraClass}${clock.done ? " is-full" : ""}" data-season-meter data-played="${Math.round(clock.played)}" data-total="${clock.total}" role="progressbar" aria-valuemin="0" aria-valuemax="${clock.total}" aria-valuenow="${Math.round(clock.played)}" aria-label="Selling Season progress" aria-valuetext="${esc(clock.label)}">
+  const hinting = activeHint()?.target === "clock" ? " is-next" : "";
+  return `<div class="season-meter ${extraClass}${clock.done ? " is-full" : ""}${hinting}" data-season-meter data-hint="clock" data-played="${Math.round(clock.played)}" data-total="${clock.total}" role="progressbar" aria-valuemin="0" aria-valuemax="${clock.total}" aria-valuenow="${Math.round(clock.played)}" aria-label="Selling Season progress" aria-valuetext="${esc(clock.label)}">
     <div class="season-meter-top"><span>Selling Season</span><span data-season-label>${esc(clock.label)}</span></div>
     <div class="season-track" aria-hidden="true"><span data-season-bar style="width:${clock.visualRatio * 100}%"></span></div>
   </div>`;
@@ -508,14 +723,6 @@ function pantryHtml() {
   }).join("")}</div>`;
 }
 
-function coachText() {
-  if (state.tutorialDone || !state.season) return "";
-  const plate = state.season.plate || {};
-  if (!plate.treat) return "Look at the bubble, then tap the same treat.";
-  if (!plate.topping) return "Now tap the matching topping.";
-  return "Tap Serve to hand it over!";
-}
-
 function renderHome() {
   const timeUp = seasonTimeUp(state.season);
   const inSeason = !!state.season && !timeUp;
@@ -525,10 +732,10 @@ function renderHome() {
       ? `Welcome back, ${BAKER}! Your minutes are still saved.`
       : `Hi, ${BAKER}! The bakery is open.`;
   const primary = timeUp
-    ? textBtn("claim", "See my unlock", "btn-go")
+    ? textBtn("claim", "See my unlock", "btn-go", "", "claim")
     : inSeason
-      ? textBtn("continue", "Continue Selling Season", "btn-go")
-      : textBtn("start", "Start Selling Season", "btn-go");
+      ? textBtn("continue", "Continue Selling Season", "btn-go", "", "continue")
+      : textBtn("start", "Start Selling Season", "btn-go", "", "start");
   const menu = TREATS.map((treat) => {
     const locked = treat.unlockLevel > state.level;
     return `<button type="button" class="choice ${locked ? "is-locked" : ""}" data-act="preview-treat" data-id="${treat.id}">
@@ -543,7 +750,7 @@ function renderHome() {
     <p class="tag">Baker ${esc(BAKER)}</p>
     <p class="lead">${esc(lead)}</p>
     <div class="pills">
-      <span class="pill">${state.coins} coins</span>
+      <span class="pill">${money(state.coins)}</span>
       <span class="pill">Level ${state.level}</span>
       <span class="pill">${esc(badgeName(state.level))}</span>
     </div>
@@ -554,10 +761,13 @@ function renderHome() {
       ${textBtn("shop", "Shop")}
       ${textBtn("recipes", "Recipes")}
     </div>
-    ${textBtn("help", "How to play", "btn-quiet")}
+    <div class="btn-row">
+      ${textBtn("howto", "How to play")}
+      ${textBtn("music", "Music")}
+    </div>
     <p class="next">${esc(nextUnlockText(state.level))}</p>
     <div class="scroller" data-scroller="home-menu">${menu}</div>
-    <p class="fine">Best season ${state.stats.best} coins · Baked ${state.stats.baked}</p>
+    <p class="fine">Best season ${money(state.stats.best)} · Baked ${state.stats.baked}</p>
   </section>`;
 }
 
@@ -569,11 +779,13 @@ function renderPlay() {
   const plate = season.plate || { treat: null, topping: null };
   const line = ui.bubble || described.line;
   const canFill = canMake(state.pantry, order.treat, order.topping, order.qty);
-  const coach = coachText();
+  const hint = activeHint();
   const treats = TREATS.map((treat) => {
     const locked = treat.unlockLevel > state.level;
     const on = plate.treat === treat.id;
-    return `<button type="button" class="choice ${on ? "is-on" : ""} ${locked ? "is-locked" : ""}" data-act="pick-treat" data-id="${treat.id}" aria-pressed="${on}">
+    const guide = treat.id === order.treat;
+    const next = guide && hint?.target === "treat" ? " is-next" : "";
+    return `<button type="button" class="choice ${on ? "is-on" : ""} ${locked ? "is-locked" : ""}${next}" data-act="pick-treat" data-id="${treat.id}" ${guide ? 'data-hint="treat"' : ""} aria-pressed="${on}">
       ${treatSvg(treat.id, "plain", 52)}
       <span class="name">${esc(treat.name)}</span>
       ${locked ? `<em>Lv ${treat.unlockLevel}</em>` : ""}
@@ -582,7 +794,9 @@ function renderPlay() {
   const toppingSource = plate.treat ? toppingsFor(plate.treat, state.level) : TOPPINGS.filter((top) => top.unlockLevel <= state.level);
   const toppings = toppingSource.map((top) => {
     const on = plate.topping === top.id;
-    return `<button type="button" class="choice ${on ? "is-on" : ""}" data-act="pick-topping" data-id="${top.id}" aria-pressed="${on}">
+    const guide = top.id === order.topping;
+    const next = guide && hint?.target === "topping" ? " is-next" : "";
+    return `<button type="button" class="choice ${on ? "is-on" : ""}${next}" data-act="pick-topping" data-id="${top.id}" ${guide ? 'data-hint="topping"' : ""} aria-pressed="${on}">
       ${toppingSvg(top.id, 48)}
       <span class="name">${esc(top.name)}</span>
     </button>`;
@@ -596,8 +810,8 @@ function renderPlay() {
   const needNote = missing.length
     ? `Need ${missing.map((item) => `${item.short} ${item.name.toLowerCase()}`).join(", ")}`
     : needs;
-  const special = season.special && season.special === order.treat ? `<em class="tag">Today's special +4</em>` : "";
-  const vip = order.vip ? `<em class="tag tag-vip">VIP +5</em>` : "";
+  const special = season.special && season.special === order.treat ? `<em class="tag">Today's special ${money(4, 16)}</em>` : "";
+  const vip = order.vip ? `<em class="tag tag-vip">VIP ${money(5, 16)}</em>` : "";
   const qty = order.qty === 2 ? `<em class="tag">Batch of 2</em>` : "";
   const timeBanner = ui.timeUp ? `<div class="timeup"><p>The season timer is full!</p><p>Finish this customer, or open your unlock.</p>${textBtn("claim", "See my unlock", "btn-go")}</div>` : "";
   const pause = ui.pause ? `<div class="overlay"><div class="sheet">
@@ -606,16 +820,17 @@ function renderPlay() {
       ${textBtn("resume", "Keep baking", "btn-go")}
       ${textBtn("shop", "Shop")}
       ${textBtn("recipes", "Recipes")}
-      ${textBtn("help", "How to play")}
+      ${textBtn("howto", "How to play")}
+      ${textBtn("help", "Tips")}
       ${textBtn("save-home", "Save and come back later", "btn-quiet")}
     </div></div>` : "";
   return `<section class="screen play" data-screen="play">
-    <header class="hud" data-coins="${state.coins}" data-level="${state.level}">
+    <header class="hud" data-coins="${state.coins}" data-level="${state.level}" data-music-live="${ui.musicLive ? "1" : "0"}">
       <button type="button" class="icon-btn" data-act="pause" aria-label="Pause">II</button>
-      <div class="hud-stat" aria-label="${state.coins} coins">${state.coins}</div>
+      <div class="hud-stat" data-hint="coins">${money(state.coins, 16)}</div>
       <div class="hud-stat" aria-label="Level ${state.level}">Lv ${state.level}</div>
-      <div class="hud-stat" aria-label="${season.earned} coins this season">+${season.earned}</div>
-      <button type="button" class="icon-btn" data-act="toggle-sound" aria-label="${state.sound ? "Sound on" : "Sound off"}">${state.sound ? "On" : "Off"}</button>
+      <div class="hud-stat">${money(season.earned, 16)}</div>
+      <button type="button" class="icon-btn" data-act="music" aria-label="Music">♪</button>
     </header>
     ${seasonMeter()}
     <div class="play-grid">
@@ -624,13 +839,15 @@ function renderPlay() {
         <div class="actors">
           <div class="customer ${esc(ui.mood)}">${customerSvg(customer, ui.mood)}</div>
           <div class="bubble">
-            ${treatSvg(order.treat, order.topping, 72)}
+            <div class="order-art ${hint?.target === "order" ? "is-next" : ""}" data-hint="order">
+              ${treatSvg(order.treat, order.topping, 104)}
+            </div>
             <div>
               <p>${esc(line)}</p>
               <small>${esc(customer.name)}</small>
               <span class="tags">${qty}${special}${vip}</span>
             </div>
-            ${ui.floater ? `<b class="floater">${esc(ui.floater)}</b>` : ""}
+            ${ui.floater !== "" && ui.floater != null && tutorialStep()?.id !== "clock" ? `<b class="floater">${money(ui.floater, 16)}</b>` : ""}
           </div>
         </div>
         <div class="patience" aria-label="How long the customer waits"><span data-patience></span></div>
@@ -638,7 +855,6 @@ function renderPlay() {
       <div class="dock">
         <div class="dock-main">
           ${timeBanner}
-          ${coach ? `<p class="coach">${esc(coach)}</p>` : ""}
           <div class="plate-row">
             <div class="plate">${plate.treat ? treatSvg(plate.treat, plate.topping || "plain", 78) : emptyPlateSvg(78)}</div>
             <div>
@@ -653,9 +869,9 @@ function renderPlay() {
         </div>
         ${pantryHtml()}
         <div class="serve-row">
-          ${textBtn("clear", "Clear", "btn-ghost")}
-          ${textBtn("serve", "Serve", "btn-go")}
-          ${textBtn("shop", "Shop", "btn-ghost")}
+          ${ui.tutorial ? "" : textBtn("clear", "Clear", "btn-ghost")}
+          ${textBtn("serve", "Serve", "btn-go", "", "serve")}
+          ${textBtn("shop", "Shop", "btn-ghost", "", "shop")}
         </div>
       </div>
     </div>
@@ -677,7 +893,7 @@ function renderShop() {
         <span class="shop-emoji">${item.emoji}</span>
         <span class="shop-name">${esc(item.name)}</span>
         <span class="shop-desc">${esc(item.desc)}</span>
-        <span class="shop-cost">${owned ? "Got it!" : `${item.cost} coins`}</span>
+        <span class="shop-cost">${owned ? "Got it!" : money(item.cost)}</span>
       </button>`;
     }).join("")}</div>`).join("");
   const awnings = unlockedAwnings(state.level).concat(AWNINGS.filter((a) => a.unlockLevel > state.level));
@@ -692,7 +908,7 @@ function renderShop() {
   }).join("")}</div>`;
   const banner = ui.timeUp ? `<div class="timeup"><p>The season timer is full!</p>${textBtn("claim", "See my unlock", "btn-go")}</div>` : "";
   return `<section class="screen sub" data-screen="shop">
-    <header class="topbar">${textBtn("back", "Back")}<h2>Shop</h2><span class="pill">${state.coins} coins</span></header>
+    <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>Shop</h2><span class="pill">${money(state.coins)}</span></header>
     ${seasonMeter()}
     ${banner}
     ${pantryHtml()}
@@ -711,12 +927,12 @@ function renderRecipes() {
         <h3>${esc(treat.name)} ${locked ? `<em>Level ${treat.unlockLevel}</em>` : ""}</h3>
         <p>${esc(describeNeeds(treat.needs))}</p>
         <p class="sub">Toppings: ${esc(tops.join(", "))}</p>
-        <p class="sub">${treat.price} coins, plus 2 with a topping</p>
+        <p class="sub">${money(treat.price)} plus ${money(2)} with a topping</p>
       </div>
     </article>`;
   }).join("");
   return `<section class="screen sub" data-screen="recipes">
-    <header class="topbar">${textBtn("back", "Back")}<h2>Recipes</h2></header>
+    <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>Recipes</h2></header>
     ${blocks}
   </section>`;
 }
@@ -726,18 +942,18 @@ function renderHelp() {
     ? `<div class="sheet inset">${textBtn("reset", "Yes, start over", "btn-go")}${textBtn("cancel-reset", "Keep my bakery")}</div>`
     : textBtn("ask-reset", "Start over", "btn-quiet");
   return `<section class="screen sub" data-screen="help">
-    <header class="topbar">${textBtn("back", "Back")}<h2>How to play</h2></header>
+    <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>How to play</h2></header>
     <ol class="steps">
       <li><b>1.</b> Read the customer's bubble. The picture is the order.</li>
       <li><b>2.</b> Tap that treat, tap the topping, then tap Serve.</li>
-      <li><b>3.</b> A happy customer pays coins. Ingredients are used only when the order is right.</li>
+      <li><b>3.</b> A happy customer pays ${coinSvg(22)} Ingredients stay if the order is wrong.</li>
       <li><b>4.</b> A Selling Season is ${esc(formatDuration(SEASON_PLAY_MS))} of baking and shopping. Leave whenever you want. The minutes are saved, and they add up.</li>
       <li><b>5.</b> When the season timer fills, you unlock something new. The bakery never closes.</li>
     </ol>
-    <p class="fine">On an iPhone or iPad, tap Share, then Add to Home Screen. It opens like an app.</p>
-    ${textBtn("toggle-sound", state.sound ? "Sound is on" : "Sound is off")}
+    ${textBtn("howto", "Show me how", "btn-go")}
+    <p class="fine">On an iPhone or iPad, tap Share, then Add to Home Screen.</p>
     <h3>Start over</h3>
-    <p class="fine">This clears coins, ingredients, the season timer, and level.</p>
+    <p class="fine">This clears your ${coinSvg(18)}, ingredients, the season timer, and level.</p>
     ${reset}
   </section>`;
 }
@@ -751,11 +967,11 @@ function renderResults() {
     <div class="confetti" aria-hidden="true">${confetti}</div>
     <p class="tag">Season complete</p>
     <h1>Level ${result.toLevel}!</h1>
-    <p class="lead">You played ${esc(formatDuration(result.played || SEASON_PLAY_MS))} and earned ${result.earned} coins.</p>
+    <p class="lead">You played ${esc(formatDuration(result.played || SEASON_PLAY_MS))} and earned ${money(result.earned)}.</p>
     <div class="unlock-art">${pictures || bakerySvg(state)}</div>
     <h2>New this season</h2>
     <ul class="unlocks">${lines}</ul>
-    ${textBtn("home", "Back to the bakery", "btn-go")}
+    ${textBtn("home", "Back to the bakery", "btn-go", "", "home")}
   </section>`;
 }
 
@@ -773,8 +989,8 @@ function render() {
     : ui.screen === "help" ? renderHelp()
     : ui.screen === "results" ? renderResults()
     : renderHome();
-  const toastHtml = ui.toast ? `<div class="toast" role="status">${esc(ui.toast)}</div>` : "";
-  app.innerHTML = screen + toastHtml;
+  const toastHtml = ui.toast ? `<div class="toast" role="status">${ui.toastHtml ? ui.toast : esc(ui.toast)}</div>` : "";
+  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml;
   const next = document.querySelector(".screen");
   if (next && next.dataset.screen === prevName) next.scrollTop = top;
   document.querySelectorAll("[data-scroller]").forEach((el) => {
@@ -782,7 +998,16 @@ function render() {
   });
   paintPatience();
   paintClock();
+  placeHand();
 }
+
+app.addEventListener("pointerdown", (event) => {
+  ui.lastInput = performance.now();
+  if (!ui.idleHint || event.target.closest(".hint-hand")) return;
+  ui.idleHint = null;
+  document.querySelector(".hint-hand")?.remove();
+  document.querySelectorAll(".is-next").forEach((el) => el.classList.remove("is-next"));
+});
 
 app.addEventListener("click", (event) => {
   const btn = event.target.closest("[data-act]");
@@ -792,11 +1017,16 @@ app.addEventListener("click", (event) => {
 
 document.addEventListener("visibilitychange", () => {
   ui.lastNow = performance.now();
+  if (document.hidden) player.suspend();
+  else if (ui.musicLive && !state.musicMuted && state.music !== "off") player.resume();
   save(state);
 });
 window.addEventListener("pagehide", () => save(state));
 
 state = load();
 ui.timeUp = seasonTimeUp(state.season);
+ui.lastInput = performance.now();
+player.setMuted(state.musicMuted);
+player.setVolume(state.musicVolume || "medium");
 render();
 requestAnimationFrame(frame);

@@ -138,7 +138,7 @@ export const CUSTOMERS = [
 
 /** Features that are not a single catalog row. */
 export const FEATURES = [
-  { level: 4, text: "Today's special (bonus coins)" },
+  { level: 4, text: "Today's special bonus" },
   { level: 5, text: "Some orders ask for two" },
   { level: 6, text: "VIP customers" },
 ];
@@ -158,7 +158,7 @@ export const BADGES = [
   "Cake Celebrator",
   "Flan Fan",
   "Season Star",
-  "Coin Collector",
+  "Treat Collector",
   "Bakery Hero",
   "Treat Wizard",
   "Pastry Legend",
@@ -176,7 +176,7 @@ export const SHOP = [
   { id: "pack-chocolate", kind: "ingredient", name: "Chocolate bar", cost: 6, emoji: "🍫", desc: "Adds 4 chocolate", gives: { chocolate: 4 } },
   { id: "pack-sprinkles", kind: "ingredient", name: "Sprinkle jar", cost: 6, emoji: "✨", desc: "Adds 4 sprinkles", gives: { sprinkles: 4 } },
   { id: "cozyOven", kind: "upgrade", name: "Cozy oven", cost: 28, emoji: "🔥", desc: "Customers wait longer" },
-  { id: "tipJar", kind: "upgrade", name: "Tip jar", cost: 36, emoji: "🫙", desc: "+2 coins on every happy serve" },
+  { id: "tipJar", kind: "upgrade", name: "Tip jar", cost: 36, emoji: "🫙", desc: "A little extra on every happy serve" },
   { id: "secondChance", kind: "upgrade", name: "Second-chance bell", cost: 32, emoji: "🔔", desc: "The first mix-up each visit does not rush them" },
   { id: "bunting", kind: "decor", name: "Bunting", cost: 12, emoji: "🚩", desc: "Cute flags under the awning", freeAt: 2 },
   { id: "lights", kind: "decor", name: "String lights", cost: 16, emoji: "✨", desc: "Twinkle lights on the wall", freeAt: 3 },
@@ -208,6 +208,32 @@ export const STICKERS = [
   { level: 22, id: "banner", name: "Welcome banner" },
   { level: 23, id: "lantern", name: "Soft lantern" },
   { level: 24, id: "teapot", name: "Polka teapot" },
+];
+
+/**
+ * Background music. Off until she taps a song.
+ * To swap in a real file later, add src: "audio/song.mp3".
+ * A src is played instead of the matching synth in js/music.js.
+ */
+export const MUSIC_TRACKS = [
+  { id: "sprinkle-party", name: "Sprinkle Party", feel: "Upbeat" },
+  { id: "midnight-muffins", name: "Midnight Muffins", feel: "Cozy" },
+  { id: "flan-dance", name: "Flan Dance", feel: "Bouncy" },
+];
+
+export const MUSIC_VOLUMES = [
+  { id: "soft", label: "Soft" },
+  { id: "medium", label: "Medium" },
+  { id: "loud", label: "Loud" },
+];
+
+/** First-visit lesson. waitFor means she taps that thing to continue. */
+export const TUTORIAL_STEPS = [
+  { id: "order", text: "This picture is the order!" },
+  { id: "treat", text: "Tap this treat.", waitFor: "treat" },
+  { id: "topping", text: "Tap this topping.", waitFor: "topping" },
+  { id: "serve", text: "Tap Serve to get paid!", waitFor: "serve" },
+  { id: "clock", text: "This bar is your Selling Season. The Shop buys ingredients.", cta: "Let's bake!" },
 ];
 
 export const THANKS = [

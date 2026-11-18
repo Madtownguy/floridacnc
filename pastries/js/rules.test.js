@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SEASON_PLAY_MS, STORAGE_KEY, TREAT_UNLOCK_ORDER } from "./data.js";
+import { MUSIC_TRACKS, SEASON_PLAY_MS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS } from "./data.js";
 import {
   addPlaytime,
   clockLabel,
@@ -126,6 +126,17 @@ test("treats follow TREAT_UNLOCK_ORDER and later levels stay extra", () => {
       `level ${level} should unlock a topping or decoration`,
     );
   }
+});
+
+test("music stays off until she picks a song, and the lesson is short", () => {
+  const game = newGame();
+  assert.equal(game.music, "off");
+  assert.equal(game.musicMuted, false);
+  assert.equal(game.tutorialSeen, false);
+  assert.deepEqual(MUSIC_TRACKS.map((track) => track.id), ["sprinkle-party", "midnight-muffins", "flan-dance"]);
+  assert.equal(MUSIC_TRACKS.some((track) => track.src), false);
+  assert.ok(TUTORIAL_STEPS.length >= 3 && TUTORIAL_STEPS.length <= 5);
+  assert.deepEqual(TUTORIAL_STEPS.map((step) => step.id), ["order", "treat", "topping", "serve", "clock"]);
 });
 
 test("a shorter config still completes when saved time already passed it", () => {

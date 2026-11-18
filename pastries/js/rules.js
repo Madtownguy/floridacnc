@@ -9,6 +9,7 @@ import {
   CUSTOMERS,
   FEATURES,
   INGREDIENTS,
+  MUSIC_TRACKS,
   SEASON_PLAY_MS,
   SHOP,
   STICKERS,
@@ -24,6 +25,10 @@ export function newGame() {
     level: 1,
     awning: "pink",
     sound: false,
+    music: "off",
+    musicMuted: false,
+    musicVolume: "medium",
+    tutorialSeen: false,
     tutorialDone: false,
     pantry: {
       flour: 8,
@@ -87,6 +92,10 @@ export function normalize(data) {
     level: clampInt(data.level, 1, 9999, 1),
     awning,
     sound: !!data.sound,
+    music: validMusic(data.music),
+    musicMuted: !!data.musicMuted,
+    musicVolume: ["soft", "medium", "loud"].includes(data.musicVolume) ? data.musicVolume : "medium",
+    tutorialSeen: !!data.tutorialSeen,
     tutorialDone: !!data.tutorialDone,
     pantry: { ...base.pantry, ...(data.pantry || {}) },
     upgrades: { ...base.upgrades, ...(data.upgrades || {}) },
@@ -94,6 +103,12 @@ export function normalize(data) {
     stats: { ...base.stats, ...(data.stats || {}) },
     season,
   };
+}
+
+function validMusic(id) {
+  if (id === "off") return "off";
+  if (MUSIC_TRACKS.some((track) => track.id === id)) return id;
+  return "off";
 }
 
 function clampInt(value, min, max, fallback) {

@@ -293,3 +293,22 @@ export function bakerySvg(state) {
     ${flowerPots}${nook}${rugShape}
   </svg>`;
 }
+
+export function coinSvg(size = 20) {
+  return `<svg class="coin" viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true">
+    <circle cx="16" cy="16" r="13.5" fill="#f8d56b" stroke="#b47b16" stroke-width="2.5"/>
+    <circle cx="16" cy="16" r="9.2" fill="#ffe9a3" stroke="#e2b23a" stroke-width="1.6"/>
+    <path d="M16 8.2 l1.7 4.3 4.6.3 -3.5 3 1.1 4.4 L16 17.8 12.1 20.2 13.2 15.8 9.7 12.8 l4.6-.3 z" fill="#f0b429" stroke="#a56b12" stroke-width="0.6"/>
+  </svg>`;
+}
+
+export function hintHandSvg() {
+  return `<svg class="hint-pointer" viewBox="0 0 70 88" width="64" height="80" aria-hidden="true">
+    <g fill="#f6c7a4" fill-opacity="0.78" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round">
+      <ellipse cx="36" cy="24" rx="18" ry="14"/>
+      <rect x="27" y="30" width="18" height="46" rx="9"/>
+      <ellipse cx="16" cy="40" rx="8" ry="11" transform="rotate(-30 16 40)"/>
+    </g>
+    <ellipse cx="36" cy="70" rx="5" ry="3.5" fill="#fff" fill-opacity="0.7"/>
+  </svg>`;
+}
