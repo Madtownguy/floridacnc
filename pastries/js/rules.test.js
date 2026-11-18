@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MUSIC_TRACKS, SEASON_PLAY_MS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS } from "./data.js";
+import { MUSIC_TRACKS, SEASON_PLAY_MS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
   clockLabel,
@@ -174,6 +174,17 @@ test("vanilla is the plain topping name in labels and orders", () => {
   assert.equal(said.line, "One vanilla cupcake, please!");
   assert.equal(said.wanted, "a vanilla cupcake");
   assert.equal(getTopping("plain").name, "Vanilla");
+});
+
+test("baker name defaults to Madison and stays short", () => {
+  assert.equal(cleanBakerName(""), "Madison");
+  assert.equal(cleanBakerName("  sam  "), "sam");
+  assert.equal(cleanBakerName("Supercalifragilistic"), "Supercalifragili");
+  const game = newGame();
+  game.bakerName = "Pip";
+  const store = memory();
+  save(game, store);
+  assert.equal(load(store).bakerName, "Pip");
 });
 
 test("a shorter config still completes when saved time already passed it", () => {

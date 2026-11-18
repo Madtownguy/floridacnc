@@ -6,6 +6,7 @@ import {
   AWNINGS,
   BADGES,
   BAKERY_GROWTH,
+  cleanBakerName,
   CUSTOMERS,
   FEATURES,
   INGREDIENTS,
@@ -17,6 +18,8 @@ import {
   TOPPINGS,
   TREATS,
 } from "./data.js";
+
+export { cleanBakerName };
 
 export function newGame() {
   return {
@@ -30,6 +33,7 @@ export function newGame() {
     musicVolume: "medium",
     sfx: true,
     tutorialSeen: false,
+    bakerName: "Madison",
     tutorialDone: false,
     pantry: {
       flour: 8,
@@ -98,6 +102,7 @@ export function normalize(data) {
     musicVolume: ["soft", "medium", "loud"].includes(data.musicVolume) ? data.musicVolume : "medium",
     sfx: data.sfx !== false,
     tutorialSeen: !!data.tutorialSeen,
+    bakerName: cleanBakerName(data.bakerName),
     tutorialDone: !!data.tutorialDone,
     pantry: { ...base.pantry, ...(data.pantry || {}) },
     upgrades: { ...base.upgrades, ...(data.upgrades || {}) },
@@ -320,6 +325,7 @@ export function describeNeeds(needs) {
 export function describeOrder(order) {
   const treat = getTreat(order.treat);
   const topping = getTopping(order.topping);
+  if (!treat || !topping) return { line: "One treat, please!", wanted: "a treat" };
   const noun = order.qty === 2 ? treat.plural : treat.name.toLowerCase();
   const count = order.qty === 2 ? "Two" : "One";
   const line = topping.id === "plain"

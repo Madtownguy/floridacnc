@@ -1,5 +1,5 @@
 /** Drawings for treats, customers, and the bakery. Original art, no outside images. */
-import { bakeryFeatures, currentAwning, hasDecor, unlockedTreats } from "./rules.js";
+import { bakeryFeatures, cleanBakerName, currentAwning, hasDecor, unlockedTreats } from "./rules.js";
 
 const INK = "#5c3a32";
 
@@ -227,6 +227,7 @@ export function bakerySvg(state) {
   const board = hasDecor(state, "chalkboard");
   const windowW = features.bigWindow ? 168 : 124;
   const windowH = features.bigWindow ? 112 : 92;
+  const initial = cleanBakerName(state.bakerName).slice(0, 1).toUpperCase();
   const counterY = features.longCounter ? 176 : 190;
   let scallop = "M0 34";
   for (let i = 0; i < 10; i += 1) scallop += ` Q${i * 40 + 20} 50 ${i * 40 + 40} 34`;
@@ -286,7 +287,7 @@ export function bakerySvg(state) {
     ${secondShelf}
     ${chalk}${starMark}${stickers}
     <circle cx="360" cy="150" r="16" fill="#fff" stroke="${INK}" stroke-width="3"/>
-    <text x="360" y="156" text-anchor="middle" font-size="16" font-weight="700" fill="${INK}" font-family="ui-rounded, sans-serif">M</text>
+    <text x="360" y="156" text-anchor="middle" font-size="16" font-weight="700" fill="${INK}" font-family="ui-rounded, sans-serif">${initial}</text>
     <rect x="0" y="${counterY}" width="400" height="${260 - counterY}" fill="#e7b07a"/>
     <rect x="0" y="${counterY}" width="400" height="14" fill="#f3c79a"/>
     ${features.longCounter ? `<rect x="300" y="${counterY - 24}" width="100" height="24" fill="#f3c79a" stroke="${INK}" stroke-width="3"/>` : ""}

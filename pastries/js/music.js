@@ -73,98 +73,72 @@ const SYNTH = {
 export function createPlayer(tracks) {
   let ctx = null;
   let master = null;
+  let musicGain = null;
+  let effectsGain = null;
   let volume = "medium";
   let muted = false;
   let effects = true;
-  let stopped = true;
+  let generation = 0;
   let timer = 0;
   let live = [];
   let audioEl = null;
   let fileSource = null;
+  let wantedId = null;
+  let playing = false;
 
   function context() {
     if (!ctx) {
-      ctx = new AudioContext();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      ctx = new AudioCtx();
       master = ctx.createGain();
-      master.gain.value = 0;
+      master.gain.value = 1;
       master.connect(ctx.destination);
+      musicGain = ctx.createGain();
+      musicGain.gain.value = 0;
+      musicGain.connect(master);
+      effectsGain = ctx.createGain();
+      effectsGain.gain.value = 0;
+      effectsGain.connect(master);
+      ctx.addEventListener("statechange", () => {
+        if (ctx.state === "running") nudge();
+      });
     }
-    if (ctx.state === "suspended") ctx.resume();
     return ctx;
   }
 
-  function gainValue() {
-    if (muted) return 0;
-    return MASTER * (VOLUME[volume] || VOLUME.medium);
+  function level() {
+    return VOLUME[volume] || VOLUME.medium;
   }
 
   function applyGain() {
-    if (!ctx || !master) return;
-    master.gain.setTargetAtTime(gainValue(), ctx.currentTime, 0.03);
-    if (audioEl) audioEl.volume = muted ? 0 : (VOLUME[volume] || 0.65);
-  }
-
-  function tone(when, freq, dur, amount, wave) {
-    const osc = ctx.createOscillator();
-    const amp = ctx.createGain();
-    osc.type = wave;
-    osc.frequency.value = freq;
-    const peak = Math.max(0.0001, amount);
-    amp.gain.setValueAtTime(0.0001, when);
-    amp.gain.exponentialRampToValueAtTime(peak, when + 0.02);
-    amp.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(0.06, dur));
-    osc.connect(amp);
-    amp.connect(master);
-    osc.start(when);
-    osc.stop(when + dur + 0.04);
-    live.push(osc);
-    osc.onended = () => {
-      live = live.filter((item) => item !== osc);
-    };
-  }
-
-  function playPattern(pattern) {
-    const beat = 60 / pattern.bpm;
-    const loop = pattern.beats * beat;
-    let when = ctx.currentTime + 0.06;
-    stopped = false;
-    const schedule = () => {
-      if (stopped) return;
-      if (document.hidden) {
-        timer = setTimeout(schedule, 400);
-        return;
-      }
-      const horizon = ctx.currentTime + 0.35;
-      while (when < horizon) {
-        for (const note of pattern.notes) {
-          tone(when + note.at * beat, midi(note.n), note.dur * beat, note.g, note.wave);
-        }
-        when += loop;
-      }
-      timer = setTimeout(schedule, Math.max(60, (when - ctx.currentTime - 0.2) * 1000));
-    };
-    schedule();
-  }
-
-  function playFile(track) {
-    audioEl = new Audio(track.src);
-    audioEl.loop = true;
-    audioEl.volume = muted ? 0 : (VOLUME[volume] || 0.65);
-    fileSource = ctx.createMediaElementSource(audioEl);
-    fileSource.connect(master);
-    audioEl.play();
-  }
-
-  function stop() {
-    stopped = true;
-    clearTimeout(timer);
-    for (const osc of live) {
-      try { osc.stop(); } catch { /* already stopped */ }
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const audible = muted ? 0 : MASTER * level();
+    if (musicGain) {
+      musicGain.gain.cancelScheduledValues(now);
+      musicGain.gain.setValueAtTime(playing && wantedId ? audible : 0, now);
     }
+    if (effectsGain) {
+      effectsGain.gain.cancelScheduledValues(now);
+      effectsGain.gain.setValueAtTime(!muted && effects ? audible : 0, now);
+    }
+    if (audioEl) audioEl.volume = !playing || muted ? 0 : level();
+  }
+
+  function silenceNode(osc) {
+    try { osc.disconnect(); } catch { /* already gone */ }
+    try { osc.stop(); } catch { /* not started yet, or already stopped */ }
+  }
+
+  function hush() {
+    generation += 1;
+    clearTimeout(timer);
+    timer = 0;
+    for (const osc of live) silenceNode(osc);
     live = [];
     if (audioEl) {
       audioEl.pause();
-      audioEl.src = "";
+      try { audioEl.removeAttribute("src"); audioEl.load(); } catch { /* ignore */ }
       audioEl = null;
     }
     if (fileSource) {
@@ -173,17 +147,109 @@ export function createPlayer(tracks) {
     }
   }
 
+  function tone(when, freq, dur, amount, wave, gen) {
+    if (gen !== generation || when < ctx.currentTime) return;
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = wave;
+    osc.frequency.value = freq;
+    const peak = Math.max(0.0001, amount);
+    amp.gain.setValueAtTime(0.0001, when);
+    amp.gain.exponentialRampToValueAtTime(peak, when + 0.03);
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(0.08, dur));
+    osc.connect(amp);
+    amp.connect(musicGain);
+    osc.start(when);
+    osc.stop(when + dur + 0.05);
+    live.push(osc);
+    osc.onended = () => {
+      live = live.filter((item) => item !== osc);
+    };
+  }
+
+  function playPattern(pattern, gen) {
+    const beat = 60 / pattern.bpm;
+    const loop = pattern.beats * beat;
+    let when = ctx.currentTime + 0.08;
+    const schedule = () => {
+      if (gen !== generation || !playing || !wantedId) return;
+      if (document.hidden || ctx.state !== "running") {
+        timer = setTimeout(schedule, 300);
+        return;
+      }
+      if (when < ctx.currentTime + 0.02) when = ctx.currentTime + 0.08;
+      const horizon = ctx.currentTime + 0.5;
+      while (when < horizon) {
+        for (const note of pattern.notes) {
+          tone(when + note.at * beat, midi(note.n), Math.min(note.dur, pattern.beats) * beat, note.g, note.wave, gen);
+        }
+        when += loop;
+      }
+      timer = setTimeout(schedule, Math.max(90, (when - ctx.currentTime - 0.2) * 1000));
+    };
+    schedule();
+  }
+
+  function beginTrack(id) {
+    if (!playing || wantedId !== id || !ctx || ctx.state !== "running") return;
+    const track = tracks.find((item) => item.id === id);
+    const pattern = track && SYNTH[track.id];
+    applyGain();
+    if (track && track.src) {
+      audioEl = new Audio(track.src);
+      audioEl.loop = true;
+      audioEl.volume = muted ? 0 : (VOLUME[volume] || 0.65);
+      fileSource = ctx.createMediaElementSource(audioEl);
+      fileSource.connect(musicGain);
+      const started = audioEl.play();
+      if (started && started.catch) started.catch(() => { /* needs another tap */ });
+    } else if (pattern) {
+      playPattern(pattern, generation);
+    }
+  }
+
+  function nudge() {
+    if (!playing || !wantedId || muted || !ctx || ctx.state !== "running") return;
+    if (timer || audioEl) return;
+    beginTrack(wantedId);
+  }
+
+  function chime(when, freq, dur, amount) {
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    amp.gain.setValueAtTime(0.0001, when);
+    amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, amount), when + 0.02);
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    osc.connect(amp);
+    amp.connect(effectsGain);
+    osc.start(when);
+    osc.stop(when + dur + 0.03);
+  }
+
   return {
     start(id) {
       const track = tracks.find((item) => item.id === id);
       if (!track) return;
-      stop();
-      context();
-      applyGain();
-      if (track.src) playFile(track);
-      else if (SYNTH[track.id]) playPattern(SYNTH[track.id]);
+      const audio = context();
+      hush();
+      wantedId = id;
+      playing = true;
+      const go = () => beginTrack(id);
+      if (audio.state === "running") go();
+      else {
+        const pending = audio.resume();
+        if (pending && pending.then) pending.then(go).catch(go);
+        else go();
+      }
     },
-    stop,
+    stop() {
+      playing = false;
+      wantedId = null;
+      hush();
+      applyGain();
+    },
     setVolume(id) {
       if (VOLUME[id]) volume = id;
       applyGain();
@@ -191,6 +257,7 @@ export function createPlayer(tracks) {
     setMuted(next) {
       muted = !!next;
       applyGain();
+      if (!muted) nudge();
     },
     setEffects(on) {
       effects = on !== false;
@@ -199,43 +266,59 @@ export function createPlayer(tracks) {
       if (!effects || muted) return;
       try {
         const audio = context();
-        applyGain();
-        const now = audio.currentTime;
-        chime(now, midi(76), 0.22, 0.05);
-        chime(now + 0.18, midi(81), 0.34, 0.045);
+        const go = () => {
+          if (!effects || muted) return;
+          applyGain();
+          const now = audio.currentTime;
+          chime(now, midi(76), 0.2, 0.05);
+          chime(now + 0.18, midi(81), 0.32, 0.04);
+        };
+        if (audio.state === "running") go();
+        else {
+          const pending = audio.resume();
+          if (pending && pending.then) pending.then(go);
+        }
       } catch {
         /* The bell is optional. */
       }
     },
-    suspend() {
-      if (ctx && ctx.state === "running") ctx.suspend();
+    resumeIfWanted() {
+      if (!playing || !wantedId || muted) return;
+      const audio = context();
+      if (audio.state === "running") {
+        if (!timer && !audioEl) beginTrack(wantedId);
+        return;
+      }
+      const pending = audio.resume();
+      if (pending && pending.then) pending.then(() => {
+        if (!timer && !audioEl) beginTrack(wantedId);
+      });
     },
-    resume() {
-      if (ctx && ctx.state === "suspended") ctx.resume();
+    prepareForBackground() {
+      const id = wantedId;
+      const was = playing;
+      hush();
+      wantedId = id;
+      playing = was;
+      applyGain();
     },
     blip(freq, dur) {
       if (!effects || muted) return;
       try {
         const audio = context();
-        applyGain();
-        chime(audio.currentTime, freq, dur, 0.04);
+        const go = () => {
+          if (!effects || muted) return;
+          applyGain();
+          chime(audio.currentTime, freq, dur, 0.04);
+        };
+        if (audio.state === "running") go();
+        else {
+          const pending = audio.resume();
+          if (pending && pending.then) pending.then(go);
+        }
       } catch {
         /* Effects are optional. */
       }
     },
   };
-
-  function chime(when, freq, dur, amount) {
-    const osc = ctx.createOscillator();
-    const amp = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    amp.gain.setValueAtTime(0.0001, when);
-    amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, amount), when + 0.015);
-    amp.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-    osc.connect(amp);
-    amp.connect(master);
-    osc.start(when);
-    osc.stop(when + dur + 0.02);
-  }
 }
