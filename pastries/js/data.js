@@ -41,6 +41,13 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  */
 export const SEASON_PLAY_MS = 35 * 60 * 1000;
 
+/**
+ * Coins added on top of her balance when a Selling Season begins.
+ * This does not replace the coins she already has.
+ * Change this number to change the bonus.
+ */
+export const SEASON_START_BONUS = 30;
+
 export const INGREDIENTS = [
   { id: "flour", name: "Flour", emoji: "🌾" },
   { id: "sugar", name: "Sugar", emoji: "🍬" },

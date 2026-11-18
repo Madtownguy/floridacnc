@@ -3,7 +3,7 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, TREATS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
+import { INGREDIENTS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
 import {
   badgeName,
   buy,
@@ -408,8 +408,10 @@ function maybeAdvance(waitFor) {
 
 function enterPlay(forceTutorial) {
   if (seasonTimeUp(state.season)) return false;
+  let freshSeason = false;
   if (!state.season) {
     state = startSeason(state, Math.random);
+    freshSeason = true;
     ui.timeUp = false;
   }
   if (!state.season.order) state = withOrder(state, rollOrder(state, Math.random));
@@ -423,6 +425,7 @@ function enterPlay(forceTutorial) {
   handKey = "";
   save(state);
   beginCustomer();
+  if (freshSeason) toast(`+${money(SEASON_START_BONUS)} for the new season!`, true);
   return true;
 }
 
@@ -1065,14 +1068,35 @@ function render() {
   placeHand();
 }
 
+function unlockAudio(event) {
+  const btn = event.target?.closest?.("[data-act]");
+  const act = btn?.dataset.act || "";
+  const id = btn?.dataset.id || "";
+  if (act === "music-pick" && id && id !== "off") {
+    player.setMuted(false);
+    player.setVolume(state.musicVolume || "medium");
+    player.start(id);
+    return;
+  }
+  if (act === "music-mute" && state.musicMuted && state.music && state.music !== "off") {
+    player.setMuted(false);
+    player.setVolume(state.musicVolume || "medium");
+    if (ui.musicLive) player.resumeIfWanted();
+    else player.start(state.music);
+    return;
+  }
+  if (ui.musicLive && state.music && state.music !== "off" && !state.musicMuted) player.resumeIfWanted();
+}
+
 app.addEventListener("pointerdown", (event) => {
   ui.lastInput = performance.now();
-  if (ui.musicLive && state.music && state.music !== "off" && !state.musicMuted) player.resumeIfWanted();
+  unlockAudio(event);
   if (!ui.idleHint || event.target.closest(".hint-hand")) return;
   ui.idleHint = null;
   document.querySelector(".hint-hand")?.remove();
   document.querySelectorAll(".is-next").forEach((el) => el.classList.remove("is-next"));
 });
+document.addEventListener("touchend", unlockAudio, { passive: true });
 
 app.addEventListener("input", (event) => {
   if (event.target.id !== "baker-name") return;
