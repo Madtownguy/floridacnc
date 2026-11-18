@@ -114,7 +114,7 @@ export const TREATS = TREAT_UNLOCK_ORDER.flat().map((id) => {
 });
 
 export const TOPPINGS = [
-  { id: "plain", name: "Classic", phrase: "classic", unlockLevel: 1, needs: {}, priceAdd: 0 },
+  { id: "plain", name: "Vanilla", phrase: "vanilla", unlockLevel: 1, needs: {}, priceAdd: 0 },
   { id: "strawberry", name: "Strawberry", phrase: "strawberry", unlockLevel: 1, needs: { fruit: 1 }, priceAdd: 2 },
   { id: "chocolate", name: "Chocolate", phrase: "chocolate", unlockLevel: 1, needs: { chocolate: 1 }, priceAdd: 2 },
   { id: "sprinkles", name: "Sprinkles", phrase: "sprinkles", unlockLevel: 1, needs: { sprinkles: 1 }, priceAdd: 2 },
@@ -216,9 +216,9 @@ export const STICKERS = [
  * A src is played instead of the matching synth in js/music.js.
  */
 export const MUSIC_TRACKS = [
-  { id: "sprinkle-party", name: "Sprinkle Party", feel: "Upbeat" },
   { id: "midnight-muffins", name: "Midnight Muffins", feel: "Cozy" },
-  { id: "flan-dance", name: "Flan Dance", feel: "Bouncy" },
+  { id: "cozy-cocoa", name: "Cozy Cocoa", feel: "Warm" },
+  { id: "sweet-flan-lullaby", name: "Sweet Flan Lullaby", feel: "Gentle" },
 ];
 
 export const MUSIC_VOLUMES = [
