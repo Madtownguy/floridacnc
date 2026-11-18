@@ -29,25 +29,23 @@ function memory() {
   };
 }
 
-test("season length is one hour and lives in the config constant", () => {
-  assert.equal(SEASON_PLAY_MS, 60 * 60 * 1000);
-  assert.equal(formatDuration(SEASON_PLAY_MS), "1 hour");
-  assert.match(clockLabel(0), /1 hour season/);
+test("season length is 35 minutes and lives in the config constant", () => {
+  assert.equal(SEASON_PLAY_MS, 35 * 60 * 1000);
+  assert.equal(formatDuration(SEASON_PLAY_MS), "35 minutes");
+  assert.match(clockLabel(0), /35-minute season · 35 min to go/);
   assert.equal(seasonClock(null).total, SEASON_PLAY_MS);
 });
 
 test("short visits add up and only the last chunk finishes the season", () => {
   let state = startSeason(newGame(), () => 0.1);
-  const chunk = 15 * 60 * 1000;
-  let finished = false;
+  const chunk = 10 * 60 * 1000;
   for (let i = 0; i < 3; i += 1) {
     const step = addPlaytime(state, chunk);
     state = step.state;
     assert.equal(step.justFinished, false);
-    finished = step.timeUp;
+    assert.equal(step.timeUp, false);
   }
-  assert.equal(finished, false);
-  assert.equal(state.season.playedMs, 45 * 60 * 1000);
+  assert.equal(state.season.playedMs, 30 * 60 * 1000);
   const last = addPlaytime(state, chunk);
   state = last.state;
   assert.equal(last.justFinished, true);
@@ -56,6 +54,34 @@ test("short visits add up and only the last chunk finishes the season", () => {
   assert.equal(extra.justFinished, false);
   assert.equal(extra.state.season.playedMs, SEASON_PLAY_MS);
   assert.equal(seasonTimeUp(state.season), true);
+});
+
+test("a saved season past 35 minutes completes instead of breaking", () => {
+  let state = startSeason(newGame(), () => 0);
+  state = {
+    ...state,
+    coins: 40,
+    season: { ...state.season, playedMs: 60 * 60 * 1000, earned: 22 },
+  };
+  const store = memory();
+  save(state, store);
+  const loaded = load(store);
+  assert.equal(loaded.season.playedMs, 60 * 60 * 1000);
+  assert.equal(loaded.coins, 40);
+  assert.equal(seasonTimeUp(loaded.season), true);
+  assert.equal(seasonClock(loaded.season).done, true);
+  assert.equal(clockLabel(loaded.season.playedMs), "Time for a new unlock!");
+  const closed = closeSeason(loaded);
+  assert.equal(closed.state.level, 2);
+  assert.equal(closed.state.season, null);
+  assert.equal(closed.state.coins, 40);
+  assert.equal(closed.played, 60 * 60 * 1000);
+  assert.ok(closed.unlocks.some((item) => item.kind === "treat" && item.id === "donut"));
+  const almost = startSeason(newGame(), () => 0);
+  almost.season.playedMs = 34 * 60 * 1000;
+  assert.equal(seasonTimeUp(almost.season), false);
+  almost.season.playedMs = 35 * 60 * 1000;
+  assert.equal(seasonTimeUp(almost.season), true);
 });
 
 test("closing the page does not invent play time, and the total is saved", () => {

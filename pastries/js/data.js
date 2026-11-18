@@ -9,7 +9,7 @@
  *   then color it in view.js. Use a level after 5 for an endless extra.
  * - New customer: add it to CUSTOMERS and draw the style in view.js.
  * - New shop item: add it to SHOP. kind is "ingredient", "upgrade", or "decor".
- * - Season length: change SEASON_PLAY_MS below. Nothing else hardcodes the hour.
+ * - Season length: change SEASON_PLAY_MS below. Nothing else hardcodes the length.
  * Ingredients used in recipes must exist in INGREDIENTS.
  */
 
@@ -25,11 +25,11 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * It pauses when the game is closed, paused, or sitting on the home screen.
  * Minutes already played are saved in localStorage, so short visits add up.
  *
- *   60 * 60 * 1000   one hour (Madison's request)
+ *   35 * 60 * 1000   thirty-five minutes (Madison's season)
+ *   60 * 60 * 1000   one hour
  *   15 * 60 * 1000   fifteen minutes
- *    2 * 60 * 1000   two minutes
  */
-export const SEASON_PLAY_MS = 60 * 60 * 1000;
+export const SEASON_PLAY_MS = 35 * 60 * 1000;
 
 export const INGREDIENTS = [
   { id: "flour", name: "Flour", emoji: "🌾" },
