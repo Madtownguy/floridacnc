@@ -129,6 +129,53 @@ export function treatSvg(treatId, toppingId = "plain", size = 80) {
   return wrap(treatInner(treatId, toppingId), size, "0 0 80 80");
 }
 
+function steam() {
+  return `<path d="M30 16 Q33 10 30 6 M40 14 Q43 8 40 4 M50 16 Q53 10 50 6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>`;
+}
+
+export function drinkInner(drinkId) {
+  if (drinkId === "hot-chocolate") {
+    return `
+      <path d="M20 32 H52 Q62 32 62 42 V56 Q62 70 50 70 H28 Q16 70 16 56 V42 Q16 32 20 32 Z" fill="#f3c7b0" stroke="${INK}" stroke-width="3"/>
+      <path d="M22 40 H54 V56 Q54 64 46 64 H28 Q22 64 22 56 V40 Z" fill="#7a4632"/>
+      <path d="M54 42 H62 Q70 42 70 50 Q70 58 62 58 H54" fill="none" stroke="${INK}" stroke-width="3"/>
+      <circle cx="30" cy="40" r="5" fill="#fff" stroke="${INK}" stroke-width="2"/>
+      <circle cx="42" cy="38" r="5" fill="#fff" stroke="${INK}" stroke-width="2"/>
+      <circle cx="36" cy="46" r="4" fill="#fff7ea" stroke="${INK}" stroke-width="2"/>
+      ${steam()}
+    `;
+  }
+  if (drinkId === "milk") {
+    return `
+      <path d="M26 22 H54 L50 70 H30 Z" fill="#f7fbff" stroke="${INK}" stroke-width="3"/>
+      <path d="M28 36 H52 L50 68 H30 Z" fill="#fff"/>
+      <path d="M32 28 H48" stroke="#d7ecff" stroke-width="4" stroke-linecap="round"/>
+      <ellipse cx="40" cy="22" rx="14" ry="5" fill="#fff" stroke="${INK}" stroke-width="3"/>
+      <ellipse cx="36" cy="46" rx="4" ry="8" fill="#fff" opacity="0.85"/>
+    `;
+  }
+  if (drinkId === "chocolate-milk") {
+    return `
+      <path d="M26 22 H54 L50 70 H30 Z" fill="#f6d7b8" stroke="${INK}" stroke-width="3"/>
+      <path d="M29 38 H51 L49 68 H31 Z" fill="#c4844a"/>
+      <path d="M34 30 Q40 36 46 30" fill="none" stroke="#7a4632" stroke-width="3" stroke-linecap="round"/>
+      <ellipse cx="40" cy="22" rx="14" ry="5" fill="#e7b98a" stroke="${INK}" stroke-width="3"/>
+      <ellipse cx="36" cy="50" rx="4" ry="7" fill="#f3d2a4" opacity="0.7"/>
+    `;
+  }
+  return `
+    <path d="M22 34 H50 Q60 34 60 44 V58 Q60 70 48 70 H28 Q16 70 16 58 V44 Q16 34 22 34 Z" fill="#fff" stroke="${INK}" stroke-width="3"/>
+    <path d="M22 42 H52 V58 Q52 64 46 64 H26 Q20 64 20 58 V42 Z" fill="#6b3a24"/>
+    <ellipse cx="36" cy="42" rx="14" ry="4" fill="#4a2818" stroke="${INK}" stroke-width="2"/>
+    <path d="M52 44 H60 Q68 44 68 52 Q68 60 60 60 H52" fill="none" stroke="${INK}" stroke-width="3"/>
+    ${steam()}
+  `;
+}
+
+export function drinkSvg(drinkId, size = 80) {
+  return wrap(drinkInner(drinkId), size, "0 0 80 80");
+}
+
 export function toppingSvg(toppingId, size = 56) {
   const color = frosting(toppingId, "#ffe08a");
   const inner = `

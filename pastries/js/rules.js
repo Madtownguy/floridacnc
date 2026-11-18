@@ -8,6 +8,8 @@ import {
   BAKERY_GROWTH,
   cleanBakerName,
   CUSTOMERS,
+  DRINK_ORDER_CHANCE,
+  DRINKS,
   FEATURES,
   INGREDIENTS,
   MUSIC_TRACKS,
@@ -79,6 +81,7 @@ export function normalize(data) {
         plate: {
           treat: TREATS.some((t) => t.id === season.plate?.treat) ? season.plate.treat : null,
           topping: TOPPINGS.some((t) => t.id === season.plate?.topping) ? season.plate.topping : null,
+          drink: DRINKS.some((d) => d.id === season.plate?.drink) ? season.plate.drink : null,
         },
         order: {
           qty: order.qty === 2 ? 2 : 1,
@@ -86,6 +89,7 @@ export function normalize(data) {
           treat: order.treat,
           topping: order.topping,
           customer: order.customer,
+          drink: DRINKS.some((d) => d.id === order.drink) ? order.drink : null,
         },
       };
     }
@@ -132,6 +136,14 @@ export function getTreat(id) {
 
 export function getTopping(id) {
   return TOPPINGS.find((t) => t.id === id) || null;
+}
+
+export function getDrink(id) {
+  return DRINKS.find((d) => d.id === id) || null;
+}
+
+export function unlockedDrinks(level) {
+  return DRINKS.filter((drink) => drink.unlockLevel <= level);
 }
 
 export function getCustomer(id) {
@@ -279,9 +291,10 @@ export function currentAwning(state) {
   return open.find((a) => a.id === state.awning) || open[0];
 }
 
-export function totalNeeds(treatId, toppingId, qty = 1) {
+export function totalNeeds(treatId, toppingId, qty = 1, drinkId = null) {
   const treat = getTreat(treatId);
   const topping = getTopping(toppingId);
+  const drink = getDrink(drinkId);
   const needs = {};
   const add = (src, times) => {
     if (!src) return;
@@ -291,7 +304,13 @@ export function totalNeeds(treatId, toppingId, qty = 1) {
   };
   add(treat && treat.needs, qty);
   add(topping && topping.needs, qty);
+  add(drink && drink.needs, 1);
   return needs;
+}
+
+export function orderNeeds(order) {
+  if (!order) return {};
+  return totalNeeds(order.treat, order.topping, order.qty || 1, order.drink || null);
 }
 
 export function missingIngredients(pantry, needs) {
@@ -328,15 +347,18 @@ export function describeOrder(order) {
   const treat = getTreat(order.treat);
   const topping = getTopping(order.topping);
   if (!treat || !topping) return { line: "One treat, please!", wanted: "a treat" };
+  const drink = getDrink(order.drink);
   const noun = order.qty === 2 ? treat.plural : treat.name.toLowerCase();
   const count = order.qty === 2 ? "Two" : "One";
-  const line = topping.id === "plain"
-    ? `${count} ${topping.phrase} ${noun}, please!`
-    : `${count} ${noun} with ${topping.phrase}, please!`;
-  const wanted = topping.id === "plain"
+  const treatBit = topping.id === "plain"
+    ? `${count} ${topping.phrase} ${noun}`
+    : `${count} ${noun} with ${topping.phrase}`;
+  const extra = drink ? ` and ${drink.with}` : "";
+  const line = `${treatBit}${extra}, please!`;
+  const wantedBit = topping.id === "plain"
     ? `${order.qty === 2 ? "two" : "a"} ${topping.phrase} ${noun}`
     : `${order.qty === 2 ? "two" : "a"} ${noun} with ${topping.phrase}`;
-  return { line, wanted };
+  return { line, wanted: `${wantedBit}${extra}` };
 }
 
 export function patienceMaxMs(state, customer) {
@@ -352,6 +374,8 @@ export function payout(state, order, fast) {
   const topping = getTopping(order.topping);
   const customer = getCustomer(order.customer);
   let coins = (treat.price + (topping.priceAdd || 0)) * (order.qty || 1);
+  const drink = getDrink(order.drink);
+  if (drink) coins += drink.price;
   coins += customer.payBonus || 0;
   if (fast) coins += 2;
   if (state.upgrades.tipJar) coins += 2;
@@ -374,12 +398,16 @@ export function rewardDecorForLevel(level) {
   return null;
 }
 
+function blankPlate() {
+  return { treat: null, topping: null, drink: null };
+}
+
 function pick(list, rng) {
   return list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
 }
 
 export function tutorialOrder() {
-  return { treat: "cupcake", topping: "strawberry", qty: 1, customer: "sunny", vip: false };
+  return { treat: "cupcake", topping: "strawberry", qty: 1, customer: "sunny", vip: false, drink: null };
 }
 
 export function rollOrder(state, rng = Math.random) {
@@ -399,7 +427,14 @@ export function rollOrder(state, rng = Math.random) {
   }
   const customer = pick(unlockedCustomers(state.level), rng);
   const vip = state.level >= 6 && rng() < 0.18;
-  return { treat: treat.id, topping: topping.id, qty, customer: customer.id, vip };
+  let drink = null;
+  if (state.tutorialDone && rng() < DRINK_ORDER_CHANCE) {
+    const open = unlockedDrinks(state.level);
+    const makeable = open.filter((item) => missingIngredients(state.pantry, item.needs).length === 0);
+    const pool = makeable.length && rng() < 0.75 ? makeable : open;
+    drink = pool.length ? pick(pool, rng).id : null;
+  }
+  return { treat: treat.id, topping: topping.id, qty, customer: customer.id, vip, drink };
 }
 
 export function startSeason(state, rng = Math.random) {
@@ -413,7 +448,7 @@ export function startSeason(state, rng = Math.random) {
     resolved: null,
     lastPay: 0,
     bonusPaid: true,
-    plate: { treat: null, topping: null },
+    plate: blankPlate(),
     order: null,
   };
   const draft = { ...state, coins: state.coins + SEASON_START_BONUS, season };
@@ -428,7 +463,7 @@ export function withOrder(state, order) {
     season: {
       ...state.season,
       order,
-      plate: { treat: null, topping: null },
+      plate: blankPlate(),
       usedSecondChance: false,
       resolved: null,
     },
@@ -437,19 +472,32 @@ export function withOrder(state, order) {
 
 export function setPlate(state, plate) {
   if (!state.season || state.season.resolved) return state;
-  return { ...state, season: { ...state.season, plate } };
+  return {
+    ...state,
+    season: {
+      ...state.season,
+      plate: {
+        treat: plate?.treat || null,
+        topping: plate?.topping || null,
+        drink: plate?.drink || null,
+      },
+    },
+  };
 }
 
 export function tryServe(state, { fast = false } = {}) {
   const season = state.season;
   if (!season || !season.order) return { state, result: "idle" };
   if (season.resolved) return { state, result: "busy" };
-  const plate = season.plate || { treat: null, topping: null };
+  const plate = season.plate || blankPlate();
   if (!plate.treat || !plate.topping) return { state, result: "incomplete" };
-  const needs = totalNeeds(plate.treat, plate.topping, season.order.qty || 1);
+  if (season.order.drink && !plate.drink) return { state, result: "need-drink" };
+  const needs = totalNeeds(plate.treat, plate.topping, season.order.qty || 1, plate.drink);
   const missing = missingIngredients(state.pantry, needs);
   if (missing.length) return { state, result: "short", missing };
-  const match = plate.treat === season.order.treat && plate.topping === season.order.topping;
+  const match = plate.treat === season.order.treat
+    && plate.topping === season.order.topping
+    && (plate.drink || null) === (season.order.drink || null);
   if (!match) {
     const usedBell = !!(state.upgrades.secondChance && !season.usedSecondChance);
     return {
@@ -457,7 +505,7 @@ export function tryServe(state, { fast = false } = {}) {
         ...state,
         season: {
           ...season,
-          plate: { treat: null, topping: null },
+          plate: blankPlate(),
           usedSecondChance: season.usedSecondChance || usedBell,
         },
       },
@@ -474,7 +522,7 @@ export function tryServe(state, { fast = false } = {}) {
       season: {
         ...season,
         earned: season.earned + pay,
-        plate: { treat: null, topping: null },
+        plate: blankPlate(),
         resolved: "sold",
         lastPay: pay,
       },
@@ -486,7 +534,7 @@ export function tryServe(state, { fast = false } = {}) {
 
 export function markLeave(state) {
   if (!state.season || state.season.resolved) return state;
-  return { ...state, season: { ...state.season, resolved: "leave", plate: { treat: null, topping: null } } };
+  return { ...state, season: { ...state.season, resolved: "leave", plate: blankPlate() } };
 }
 
 export function takeResolution(state) {
@@ -505,7 +553,7 @@ export function takeResolution(state) {
     resolved: null,
     lastPay: 0,
     bonusPaid: season.bonusPaid !== false,
-    plate: { treat: null, topping: null },
+    plate: blankPlate(),
     order: null,
   };
   const stats = {

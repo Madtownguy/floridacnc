@@ -9,6 +9,8 @@
  *   then color it in view.js. Use a level after 5 for an endless extra.
  * - New customer: add it to CUSTOMERS and draw the style in view.js.
  * - New shop item: add it to SHOP. kind is "ingredient", "upgrade", or "decor".
+ * - New drink: add it to DRINKS and draw it in view.js drinkInner().
+ *   unlockLevel 1 means it is available from the start.
  * - Season length: change SEASON_PLAY_MS below. Nothing else hardcodes the length.
  * Ingredients used in recipes must exist in INGREDIENTS.
  */
@@ -144,6 +146,23 @@ export const TOPPINGS = [
   { id: "coconut", name: "Coconut", phrase: "coconut", unlockLevel: 8, needs: { sugar: 1 }, priceAdd: 2 },
 ];
 
+/**
+ * Drinks customers can ask for with a treat.
+ * unlockLevel 1 means it is on the menu from the start.
+ * Raise unlockLevel later to hide a drink until that level.
+ * needs uses ingredients from INGREDIENTS. An empty needs list is fine.
+ * with is the short phrase used in the customer's sentence.
+ */
+export const DRINKS = [
+  { id: "coffee", name: "Coffee", with: "a coffee", unlockLevel: 1, price: 4, needs: { sugar: 1 } },
+  { id: "hot-chocolate", name: "Hot Chocolate", with: "a hot chocolate", unlockLevel: 1, price: 5, needs: { milk: 1, chocolate: 1 } },
+  { id: "milk", name: "Milk", with: "milk", unlockLevel: 1, price: 3, needs: { milk: 1 } },
+  { id: "chocolate-milk", name: "Chocolate Milk", with: "a chocolate milk", unlockLevel: 1, price: 4, needs: { milk: 1, chocolate: 1 } },
+];
+
+/** About one customer in three also asks for a drink, after the first lesson. */
+export const DRINK_ORDER_CHANCE = 0.3;
+
 export const CUSTOMERS = [
   { id: "sunny", name: "Sunny", unlockLevel: 1, patience: 1, payBonus: 0, skin: "#f6c7a4", shirt: "#ff8fb8" },
   { id: "pip", name: "Pip", unlockLevel: 1, patience: 1, payBonus: 0, skin: "#f8d7b8", shirt: "#ffd166" },
@@ -250,7 +269,7 @@ export const TUTORIAL_STEPS = [
   { id: "treat", text: "Tap this treat.", waitFor: "treat" },
   { id: "topping", text: "Tap this topping.", waitFor: "topping" },
   { id: "serve", text: "Tap Serve to get paid!", waitFor: "serve" },
-  { id: "clock", text: "This bar is your Selling Season. The Shop buys ingredients.", cta: "Let's bake!" },
+  { id: "clock", text: "This bar is your Selling Season. Sometimes they want a drink too.", cta: "Let's bake!" },
 ];
 
 export const THANKS = [
