@@ -311,6 +311,26 @@ h2, h3 { margin: 0; }
 .row-label { margin: 2px 0 0; font-size: 0.78rem; font-weight: 800; color: var(--soft); }
 .drink-choice { width: 84px; min-height: 72px; padding: 4px; }
 .drink-choice svg { width: 40px; height: 40px; }
+.sip-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: 4px 0 8px; }
+.sip-step {
+  min-height: 84px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px;
+}
+.sip-step svg { width: 48px; height: 48px; }
+.sip-step .name { font-size: 0.78rem; font-weight: 800; text-align: center; line-height: 1.05; }
+.sip-step.is-done { background: #e5fff3; }
+.sip-step.is-fresh { animation: sip-pop 0.55s ease; }
+@keyframes sip-pop {
+  0% { transform: translateY(10px) scale(0.92); }
+  55% { transform: translateY(-8px) scale(1.06); }
+  100% { transform: none; }
+}
 .bubble.is-next { animation: next-pulse 1s ease-in-out infinite; }
 .floater {
   position: absolute;

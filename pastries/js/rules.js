@@ -10,6 +10,7 @@ import {
   CUSTOMERS,
   COCOA_MARSHMALLOW_CHANCE,
   DRINK_ORDER_CHANCE,
+  DRINK_STEPS,
   DRINKS,
   FEATURES,
   INGREDIENTS,
@@ -80,21 +81,35 @@ export function normalize(data) {
         resolved,
         lastPay: clampInt(season.lastPay, 0, 999999, 0),
         bonusPaid: season.bonusPaid !== false,
-        plate: {
-          treat: TREATS.some((t) => t.id === season.plate?.treat) ? season.plate.treat : null,
-          topping: TOPPINGS.some((t) => t.id === season.plate?.topping) ? season.plate.topping : null,
-          drink: DRINKS.some((d) => d.id === season.plate?.drink) ? season.plate.drink : null,
-          float: season.plate?.float === "marshmallow" ? "marshmallow" : null,
-        },
-        order: {
-          qty: order.qty === 2 ? 2 : 1,
-          vip: !!order.vip,
-          treat: order.treat,
-          topping: order.topping,
-          customer: order.customer,
-          drink: DRINKS.some((d) => d.id === order.drink) ? order.drink : null,
-          float: order.float === "marshmallow" ? "marshmallow" : null,
-        },
+        ...(() => {
+          const orderDrink = DRINKS.some((d) => d.id === order.drink) ? order.drink : null;
+          const orderFloat = order.float === "marshmallow" ? "marshmallow" : null;
+          const plateDrink = DRINKS.some((d) => d.id === season.plate?.drink) ? season.plate.drink : null;
+          const plateFloat = season.plate?.float === "marshmallow" ? "marshmallow" : null;
+          const sips = cleanSips(
+            { drink: orderDrink, float: orderFloat },
+            { drink: plateDrink, float: plateFloat, sips: season.plate?.sips },
+          );
+          const made = drinkSteps(orderDrink, orderFloat).length > 0 && sips.length === drinkSteps(orderDrink, orderFloat).length;
+          return {
+            plate: {
+              treat: TREATS.some((t) => t.id === season.plate?.treat) ? season.plate.treat : null,
+              topping: TOPPINGS.some((t) => t.id === season.plate?.topping) ? season.plate.topping : null,
+              drink: made ? orderDrink : null,
+              float: made && orderFloat === "marshmallow" ? "marshmallow" : null,
+              sips,
+            },
+            order: {
+              qty: order.qty === 2 ? 2 : 1,
+              vip: !!order.vip,
+              treat: order.treat,
+              topping: order.topping,
+              customer: order.customer,
+              drink: orderDrink,
+              float: orderFloat,
+            },
+          };
+        })(),
       };
     }
   }
@@ -131,15 +146,10 @@ function validMusic(id) {
 function migratedLimit(season) {
   const played = clampInt(season?.playedMs, 0, 24 * 60 * 60 * 1000, 0);
   const saved = Number(season?.limitMs);
-  if (Number.isFinite(saved) && saved > 0) {
-    return clampInt(saved, 1, 24 * 60 * 60 * 1000, SEASON_PLAY_MS);
-  }
-  // Older saves used a 35-minute season and did not store their own length.
-  // Keep the minutes already played, and don't leave more than 25 minutes to go.
-  const previous = 35 * 60 * 1000;
-  const oldRemaining = Math.max(0, previous - played);
-  const remaining = Math.min(oldRemaining, SEASON_PLAY_MS);
-  return played + remaining;
+  const previous = 25 * 60 * 1000;
+  const end = Number.isFinite(saved) && saved > 0 ? saved : previous;
+  const remaining = Math.max(0, end - played);
+  return played + Math.min(remaining, SEASON_PLAY_MS);
 }
 
 function clampInt(value, min, max, fallback) {
@@ -158,6 +168,24 @@ export function getTopping(id) {
 
 export function getDrink(id) {
   return DRINKS.find((d) => d.id === id) || null;
+}
+
+export function drinkSteps(drinkId, floatId) {
+  const steps = DRINK_STEPS[drinkId] || [];
+  return steps.filter((step) => !step.when || step.when === floatId);
+}
+
+function cleanSips(order, plate) {
+  const steps = drinkSteps(order?.drink, order?.float);
+  const ids = steps.map((step) => step.id);
+  const raw = Array.isArray(plate?.sips) ? plate.sips : [];
+  const sips = [];
+  for (let i = 0; i < ids.length; i += 1) {
+    if (raw[i] === ids[i]) sips.push(ids[i]);
+    else break;
+  }
+  if (plate?.drink && plate.drink === order?.drink && (!order?.float || plate?.float === order.float)) return ids;
+  return sips;
 }
 
 export function unlockedDrinks(level) {
@@ -429,7 +457,7 @@ export function rewardDecorForLevel(level) {
 }
 
 function blankPlate() {
-  return { treat: null, topping: null, drink: null, float: null };
+  return { treat: null, topping: null, drink: null, float: null, sips: [] };
 }
 
 function pick(list, rng) {
@@ -437,7 +465,7 @@ function pick(list, rng) {
 }
 
 export function tutorialOrder() {
-  return { treat: "cupcake", topping: "strawberry", qty: 1, customer: "sunny", vip: false, drink: null, float: null };
+  return { treat: "cupcake", topping: "strawberry", qty: 1, customer: "sunny", vip: false, drink: "milk", float: null };
 }
 
 export function rollOrder(state, rng = Math.random) {
@@ -502,6 +530,26 @@ export function withOrder(state, order) {
   };
 }
 
+export function applySip(state, stepId) {
+  const order = state.season?.order;
+  if (!state.season || !order?.drink) return { state, result: "none", hint: "" };
+  const steps = drinkSteps(order.drink, order.float);
+  const sips = state.season.plate?.sips || [];
+  if (sips.length >= steps.length) return { state, result: "done", hint: "" };
+  const next = steps[sips.length];
+  if (stepId !== next.id) return { state, result: "hint", hint: next.hint, next: next.id };
+  const nextSips = [...sips, stepId];
+  const made = nextSips.length === steps.length;
+  const nextState = setPlate(state, {
+    treat: state.season.plate?.treat || null,
+    topping: state.season.plate?.topping || null,
+    drink: made ? order.drink : null,
+    float: made && order.float === "marshmallow" ? "marshmallow" : null,
+    sips: nextSips,
+  });
+  return { state: nextState, result: made ? "made" : "ok", hint: next.hint };
+}
+
 export function setPlate(state, plate) {
   if (!state.season || state.season.resolved) return state;
   return {
@@ -513,6 +561,7 @@ export function setPlate(state, plate) {
         topping: plate?.topping || null,
         drink: plate?.drink || null,
         float: plate?.float === "marshmallow" ? "marshmallow" : null,
+        sips: Array.isArray(plate?.sips) ? plate.sips.filter((id) => typeof id === "string") : [],
       },
     },
   };

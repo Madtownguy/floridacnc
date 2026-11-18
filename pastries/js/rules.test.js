@@ -3,6 +3,7 @@ import test from "node:test";
 import { DRINK_ORDER_CHANCE, DRINKS, MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
+  applySip,
   clockLabel,
   closeSeason,
   describeOrder,
@@ -18,6 +19,7 @@ import {
   takeResolution,
   tryServe,
   tutorialOrder,
+  drinkSteps,
   unlockedTreats,
 } from "./rules.js";
 import { load, save } from "./state.js";
@@ -30,23 +32,21 @@ function memory() {
   };
 }
 
-test("season length is 25 minutes and lives in the config constant", () => {
-  assert.equal(SEASON_PLAY_MS, 25 * 60 * 1000);
-  assert.equal(formatDuration(SEASON_PLAY_MS), "25 minutes");
-  assert.match(clockLabel(0), /25-minute season · 25 min to go/);
+test("season length is 20 minutes and lives in the config constant", () => {
+  assert.equal(SEASON_PLAY_MS, 20 * 60 * 1000);
+  assert.equal(formatDuration(SEASON_PLAY_MS), "20 minutes");
+  assert.match(clockLabel(0), /20-minute season · 20 min to go/);
   assert.equal(seasonClock(null).total, SEASON_PLAY_MS);
 });
 
 test("short visits add up and only the last chunk finishes the season", () => {
   let state = startSeason(newGame(), () => 0.1);
   const chunk = 10 * 60 * 1000;
-  for (let i = 0; i < 2; i += 1) {
-    const step = addPlaytime(state, chunk);
-    state = step.state;
-    assert.equal(step.justFinished, false);
-    assert.equal(step.timeUp, false);
-  }
-  assert.equal(state.season.playedMs, 20 * 60 * 1000);
+  const step = addPlaytime(state, chunk);
+  state = step.state;
+  assert.equal(step.justFinished, false);
+  assert.equal(step.timeUp, false);
+  assert.equal(state.season.playedMs, 10 * 60 * 1000);
   const last = addPlaytime(state, chunk);
   state = last.state;
   assert.equal(last.justFinished, true);
@@ -57,7 +57,7 @@ test("short visits add up and only the last chunk finishes the season", () => {
   assert.equal(seasonTimeUp(state.season), true);
 });
 
-test("a saved season past 25 minutes completes instead of breaking", () => {
+test("a saved season past 20 minutes completes instead of breaking", () => {
   let state = startSeason(newGame(), () => 0);
   state = {
     ...state,
@@ -79,14 +79,14 @@ test("a saved season past 25 minutes completes instead of breaking", () => {
   assert.equal(closed.played, 60 * 60 * 1000);
   assert.ok(closed.unlocks.some((item) => item.kind === "treat" && item.id === "donut"));
   const almost = startSeason(newGame(), () => 0);
-  almost.season.playedMs = 24 * 60 * 1000;
+  almost.season.playedMs = 19 * 60 * 1000;
   assert.equal(seasonTimeUp(almost.season), false);
-  almost.season.playedMs = 25 * 60 * 1000;
+  almost.season.playedMs = 20 * 60 * 1000;
   assert.equal(seasonTimeUp(almost.season), true);
 });
 
-test("an in-progress 35-minute season keeps its minutes and caps time left at 25", () => {
-  function saved(playedMin, coins) {
+test("an in-progress season keeps minutes played and caps time left at 20", () => {
+  function saved(playedMin, coins, limitMin) {
     const raw = {
       v: 1,
       coins,
@@ -97,6 +97,7 @@ test("an in-progress 35-minute season keeps its minutes and caps time left at 25
         playedMs: playedMin * 60 * 1000,
         earned: 11,
         bonusPaid: true,
+        ...(limitMin ? { limitMs: limitMin * 60 * 1000 } : {}),
         order: { treat: "cookie", topping: "plain", qty: 1, customer: "sunny", vip: false },
         plate: { treat: null, topping: null },
       },
@@ -105,25 +106,24 @@ test("an in-progress 35-minute season keeps its minutes and caps time left at 25
     store.setItem(STORAGE_KEY, JSON.stringify(raw));
     return load(store);
   }
-  const early = saved(0, 77);
+  const early = saved(0, 77, 25);
   assert.equal(early.coins, 77);
   assert.equal(early.season.playedMs, 0);
-  assert.equal(early.season.limitMs, 25 * 60 * 1000);
-  assert.equal(seasonClock(early.season).left, 25 * 60 * 1000);
-  const halfway = saved(10, 80);
+  assert.equal(early.season.limitMs, 20 * 60 * 1000);
+  assert.equal(seasonClock(early.season).left, 20 * 60 * 1000);
+  const halfway = saved(10, 80, 25);
   assert.equal(halfway.coins, 80);
   assert.equal(halfway.season.playedMs, 10 * 60 * 1000);
-  assert.equal(seasonClock(halfway.season).left, 25 * 60 * 1000);
+  assert.equal(seasonClock(halfway.season).left, 15 * 60 * 1000);
   assert.equal(seasonTimeUp(halfway.season), false);
-  const later = saved(20, 90);
+  const later = saved(20, 90, 25);
   assert.equal(later.season.playedMs, 20 * 60 * 1000);
-  assert.equal(seasonClock(later.season).left, 15 * 60 * 1000);
+  assert.equal(seasonClock(later.season).left, 5 * 60 * 1000);
   assert.equal(later.coins, 90);
-  const almost = saved(30, 100);
-  assert.equal(almost.season.playedMs, 30 * 60 * 1000);
-  assert.equal(seasonClock(almost.season).left, 5 * 60 * 1000);
-  assert.equal(seasonTimeUp(almost.season), false);
-  assert.equal(almost.coins, 100);
+  const long = saved(10, 100, 35);
+  assert.equal(long.season.playedMs, 10 * 60 * 1000);
+  assert.equal(seasonClock(long.season).left, 20 * 60 * 1000);
+  assert.equal(long.coins, 100);
 });
 
 test("closing the page does not invent play time, and the total is saved", () => {
@@ -206,8 +206,8 @@ test("music stays off until she picks a song, and the lesson is short", () => {
   assert.equal(game.tutorialSeen, false);
   assert.deepEqual(MUSIC_TRACKS.map((track) => track.id), ["midnight-muffins", "cozy-cocoa", "sweet-flan-lullaby"]);
   assert.equal(MUSIC_TRACKS.some((track) => track.src), false);
-  assert.ok(TUTORIAL_STEPS.length >= 3 && TUTORIAL_STEPS.length <= 5);
-  assert.deepEqual(TUTORIAL_STEPS.map((step) => step.id), ["order", "treat", "topping", "serve", "clock"]);
+  assert.ok(TUTORIAL_STEPS.length >= 3 && TUTORIAL_STEPS.length <= 6);
+  assert.deepEqual(TUTORIAL_STEPS.map((step) => step.id), ["order", "treat", "topping", "sip", "serve", "clock"]);
 });
 
 test("vanilla is the plain topping name in labels and orders", () => {
@@ -269,7 +269,7 @@ test("a shorter config still completes when saved time already passed it", () =>
 test("drinks are optional, priced, and old saves keep their coins", () => {
   assert.equal(DRINK_ORDER_CHANCE, 0.3);
   assert.deepEqual(DRINKS.map((drink) => drink.unlockLevel), [1, 1, 1, 1]);
-  assert.equal(tutorialOrder().drink, null);
+  assert.equal(tutorialOrder().drink, "milk");
   const said = describeOrder({ treat: "cupcake", topping: "plain", qty: 1, customer: "sunny", drink: "milk" });
   assert.equal(said.line, "One vanilla cupcake and milk, please!");
   const fresh = { ...newGame(), tutorialDone: true };
@@ -382,4 +382,53 @@ test("marshmallow is a starting topping and an optional cocoa add-on", () => {
   assert.equal(sold.pay, 8 + 2 + 5 + 2);
   assert.equal(sold.state.pantry.sugar, state.pantry.sugar - 2);
   assert.equal(sold.state.coins, state.coins + sold.pay);
+});
+
+test("drinks are made one step at a time, and a wrong tap only hints", () => {
+  const milk = drinkSteps("milk");
+  assert.deepEqual(milk.map((step) => step.id), ["glass", "pour-milk"]);
+  assert.deepEqual(drinkSteps("coffee").map((step) => step.id), ["cup", "pour-coffee"]);
+  assert.deepEqual(drinkSteps("chocolate-milk").map((step) => step.id), ["glass", "milk", "chocolate", "stir"]);
+  assert.deepEqual(drinkSteps("hot-chocolate").map((step) => step.id), ["mug", "cocoa", "hot-milk", "stir"]);
+  assert.equal(drinkSteps("hot-chocolate", "marshmallow").at(-1).id, "marshmallow");
+  let state = startSeason(newGame(), () => 0);
+  state = {
+    ...state,
+    season: {
+      ...state.season,
+      plate: { treat: "cupcake", topping: "strawberry", drink: null, float: null, sips: [] },
+    },
+  };
+  const before = state.coins;
+  const wrong = applySip(state, "pour-milk");
+  assert.equal(wrong.result, "hint");
+  assert.equal(wrong.hint, "Tap the glass!");
+  assert.equal(wrong.state.coins, before);
+  assert.equal(wrong.state.season.plate.drink, null);
+  state = applySip(state, "glass").state;
+  const made = applySip(state, "pour-milk");
+  assert.equal(made.result, "made");
+  assert.equal(made.state.season.plate.drink, "milk");
+  const sold = tryServe(made.state, { fast: false });
+  assert.equal(sold.result, "match");
+  assert.equal(sold.state.pantry.milk, state.pantry.milk - 1);
+  const old = {
+    v: 1,
+    coins: 64,
+    level: 2,
+    season: {
+      playedMs: 1000,
+      earned: 4,
+      bonusPaid: true,
+      limitMs: 20 * 60 * 1000,
+      order: { treat: "cupcake", topping: "strawberry", qty: 1, customer: "sunny", vip: false, drink: "coffee" },
+      plate: { treat: "cupcake", topping: "strawberry", drink: "coffee" },
+    },
+  };
+  const store = memory();
+  store.setItem(STORAGE_KEY, JSON.stringify(old));
+  const loaded = load(store);
+  assert.equal(loaded.coins, 64);
+  assert.deepEqual(loaded.season.plate.sips, ["cup", "pour-coffee"]);
+  assert.equal(loaded.season.plate.drink, "coffee");
 });

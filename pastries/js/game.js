@@ -10,6 +10,7 @@ import {
   closeSeason,
   describeNeeds,
   describeOrder,
+  drinkSteps,
   formatDuration,
   getCustomer,
   getDrink,
@@ -36,13 +37,14 @@ import {
   unlockedTreats,
   withOrder,
   addPlaytime,
+  applySip,
   SHOP,
   AWNINGS,
   TOPPINGS,
 } from "./rules.js";
 import { createPlayer } from "./music.js";
 import { load, save } from "./state.js";
-import { bakerySvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, hintHandSvg, toppingSvg, treatSvg } from "./view.js";
+import { bakerySvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, hintHandSvg, sipSvg, toppingSvg, treatSvg } from "./view.js";
 
 const IDLE_MS = 4500;
 const WALK_MS = 900;
@@ -81,6 +83,7 @@ function freshUi() {
     musicOpen: false,
     musicLive: false,
     phase: "here",
+    freshSip: "",
   };
 }
 
@@ -298,11 +301,13 @@ function onServe() {
     return;
   }
   if (out.result === "need-drink") {
-    toast("Tap their drink too!");
+    const steps = drinkSteps(state.season.order?.drink, state.season.order?.float);
+    const next = steps[(state.season.plate?.sips || []).length];
+    toast(next?.hint || "Make their drink!");
     return;
   }
   if (out.result === "need-float") {
-    toast("Tap marshmallows for the cocoa!");
+    toast("Add marshmallows!");
     return;
   }
   if (out.result === "short") {
@@ -395,44 +400,18 @@ function pickTopping(id) {
   render();
 }
 
-function pickDrink(id) {
-  if (ui.busy || !state.season?.order) return;
-  const drink = getDrink(id);
-  if (!drink) return;
-  if (drink.unlockLevel > state.level) {
-    toast(`${drink.name} unlocks at level ${drink.unlockLevel}.`);
+function onSip(id) {
+  if (ui.busy || !state.season?.order?.drink) return;
+  const out = applySip(state, id);
+  if (out.result === "hint") {
+    toast(out.hint || "Try the next step!");
     return;
   }
-  if (!state.season.order.drink) {
-    toast("No drink this time!");
-    return;
-  }
-  const plate = state.season.plate || {};
-  const turningOff = plate.drink === id;
-  const nextDrink = turningOff ? null : id;
-  state = setPlate(state, {
-    treat: plate.treat || null,
-    topping: plate.topping || null,
-    drink: nextDrink,
-    float: nextDrink === "hot-chocolate" ? (plate.float || null) : null,
-  });
-  save(state);
-  render();
-}
-
-function pickFloat() {
-  if (ui.busy || !state.season?.order) return;
-  if (state.season.order.float !== "marshmallow") {
-    toast("No marshmallows this time!");
-    return;
-  }
-  const plate = state.season.plate || {};
-  state = setPlate(state, {
-    treat: plate.treat || null,
-    topping: plate.topping || null,
-    drink: plate.drink || null,
-    float: plate.float === "marshmallow" ? null : "marshmallow",
-  });
+  if (out.result !== "ok" && out.result !== "made") return;
+  state = out.state;
+  ui.freshSip = id;
+  blip(out.result === "made" ? 660 : 520, 0.08);
+  if (out.result === "made" && tutorialStep()?.waitFor === "sip") nextTutorial();
   save(state);
   render();
 }
@@ -512,8 +491,11 @@ function idleHint() {
     }
     if (!plate.treat) return { target: "treat", text: "Tap this treat." };
     if (!plate.topping) return { target: "topping", text: "Tap this topping." };
-    if (order?.drink && plate.drink !== order.drink) return { target: "drink", text: "Tap this drink." };
-    if (order?.float && plate.float !== order.float) return { target: "float", text: "Tap marshmallows!" };
+    if (order?.drink && plate.drink !== order.drink) {
+      const steps = drinkSteps(order.drink, order.float);
+      const next = steps[(plate.sips || []).length];
+      return { target: "sip", text: next?.hint || "Tap the next step!" };
+    }
     return { target: "serve", text: "Tap Serve!" };
   }
   return null;
@@ -701,12 +683,8 @@ function handle(act, id) {
     pickTopping(id);
     return;
   }
-  if (act === "pick-drink") {
-    pickDrink(id);
-    return;
-  }
-  if (act === "pick-float") {
-    pickFloat();
+  if (act === "sip") {
+    onSip(id);
     return;
   }
   if (act === "clear" && state.season && !ui.busy) {
@@ -924,21 +902,22 @@ function renderPlay() {
       <span class="name">${esc(top.name)}</span>
     </button>`;
   }).join("");
-  const drinks = DRINKS.map((drink) => {
-    const locked = drink.unlockLevel > state.level;
-    const on = plate.drink === drink.id;
-    const guide = drink.id === order.drink;
-    const next = guide && hint?.target === "drink" ? " is-next" : "";
-    return `<button type="button" class="choice drink-choice ${on ? "is-on" : ""} ${locked ? "is-locked" : ""}${next}" data-act="pick-drink" data-id="${drink.id}" ${guide ? 'data-hint="drink"' : ""} aria-pressed="${on}">
-      ${drinkSvg(drink.id, 48)}
-      <span class="name">${esc(drink.name)}</span>
-      ${locked ? `<em>Lv ${drink.unlockLevel}</em>` : ""}
+  const steps = order.drink ? drinkSteps(order.drink, order.float) : [];
+  const doneSips = plate.sips || [];
+  const nextSip = steps[doneSips.length];
+  const sipButtons = steps.map((step, index) => {
+    const done = index < doneSips.length;
+    const current = step.id === nextSip?.id;
+    const fresh = ui.freshSip === step.id ? " is-fresh" : "";
+    return `<button type="button" class="btn sip-step ${done ? "is-done" : ""}${current && hint?.target === "sip" ? " is-next" : ""}${fresh}" data-act="sip" data-id="${step.id}" ${current ? 'data-hint="sip"' : ""} aria-pressed="${done}">
+      ${sipSvg(step.id, 56)}
+      <span class="name">${esc(step.name)}</span>
     </button>`;
   }).join("");
-  const drinkReady = (!order.drink || plate.drink) && (!order.float || plate.float);
+  const drinkReady = !order.drink || plate.drink === order.drink;
   const needs = plate.treat && plate.topping && drinkReady
     ? describeNeeds(totalNeeds(plate.treat, plate.topping, order.qty, plate.drink, plate.float))
-    : (plate.treat && plate.topping && order.float && plate.drink ? "Tap marshmallows" : (plate.treat && plate.topping && order.drink ? "Tap their drink" : "Pick a treat and a topping"));
+    : (plate.treat && plate.topping && order.drink ? (nextSip?.hint || "Make their drink") : "Pick a treat and a topping");
   const missing = plate.treat && plate.topping && drinkReady
     ? missingIngredients(state.pantry, totalNeeds(plate.treat, plate.topping, order.qty, plate.drink, plate.float))
     : [];
@@ -1011,8 +990,7 @@ function renderPlay() {
           <div class="scroller" data-scroller="toppings">${toppings}</div>
           ${canFill ? "" : textBtn("let-go", "Let them go kindly", "btn-quiet wide")}
         </div>
-        <p class="row-label">Drinks</p>
-        <div class="scroller" data-scroller="drinks">${order.drink === "hot-chocolate" ? `<button type="button" class="choice drink-choice ${plate.float === "marshmallow" ? "is-on" : ""}${hint?.target === "float" ? " is-next" : ""}" data-act="pick-float" data-hint="float" aria-pressed="${plate.float === "marshmallow"}">${toppingSvg("marshmallow", 40)}<span class="name">Marshmallow</span></button>` : ""}${drinks}</div>
+        ${steps.length ? `<p class="row-label">Make the ${esc(getDrink(order.drink)?.name || "drink")}</p><div class="sip-row" data-scroller="sips">${sipButtons}</div>` : ""}
         ${pantryHtml()}
         <div class="serve-row">
           ${ui.tutorial ? "" : textBtn("clear", "Clear", "btn-ghost")}
@@ -1085,6 +1063,7 @@ function renderRecipes() {
       <div>
         <h3>${esc(drink.name)} ${locked ? `<em>Level ${drink.unlockLevel}</em>` : ""}</h3>
         <p>${esc(needs || "Ready to pour")}</p>
+        <p class="sub">${esc(drinkSteps(drink.id).map((step) => step.name).join(" → "))}</p>
         <p class="sub">${money(drink.price)}</p>
       </div>
     </article>`;
@@ -1115,7 +1094,7 @@ function renderHelp() {
     <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>How to play</h2></header>
     <ol class="steps">
       <li><b>1.</b> Read the customer's bubble. The picture is the order.</li>
-      <li><b>2.</b> Tap that treat, tap the topping, then tap Serve. If they want a drink, tap it too. Cocoa sometimes wants marshmallows.</li>
+      <li><b>2.</b> Tap that treat, then the topping. If they want a drink, tap each step in order. A wrong tap just shows what is next. Then tap Serve.</li>
       <li><b>3.</b> A happy customer pays ${coinSvg(22)} Ingredients stay if the order is wrong.</li>
       <li><b>4.</b> A Selling Season is ${esc(formatDuration(SEASON_PLAY_MS))} of baking and shopping. Leave whenever you want. The minutes are saved, and they add up.</li>
       <li><b>5.</b> When the season timer fills, you unlock something new. The bakery never closes.</li>
@@ -1146,6 +1125,9 @@ function renderResults() {
 }
 
 function render() {
+  if (tutorialStep()?.waitFor === "sip" && state.season?.order?.drink && state.season.plate?.drink === state.season.order.drink) {
+    nextTutorial();
+  }
   const prev = document.querySelector(".screen");
   const prevName = prev?.dataset.screen;
   const top = prev?.scrollTop || 0;
