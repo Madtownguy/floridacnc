@@ -44,7 +44,7 @@ import {
 } from "./rules.js";
 import { createPlayer } from "./music.js";
 import { load, save } from "./state.js";
-import { bakerySvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, hintHandSvg, shopSvg, sipSvg, toppingSvg, treatSvg } from "./view.js";
+import { bakerySvg, bookSvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, gearSvg, hintHandSvg, noteSvg, shopSvg, sipSvg, toppingSvg, treatSvg } from "./view.js";
 
 const IDLE_MS = 4500;
 const WALK_MS = 900;
@@ -797,8 +797,10 @@ function textBtn(act, label, cls = "", id = "", hint = "") {
   const idAttr = id ? ` data-id="${esc(id)}"` : "";
   const hintAttr = hint ? ` data-hint="${esc(hint)}"` : "";
   const next = hint && activeHint()?.target === hint ? " is-next" : "";
-  const inner = act === "shop"
-    ? `<span class="btn-with-icon">${shopSvg(22)}<span>${esc(label)}</span></span>`
+  const icons = { shop: shopSvg, recipes: bookSvg, settings: gearSvg, music: noteSvg };
+  const draw = icons[act];
+  const inner = draw
+    ? `<span class="btn-with-icon">${draw(22)}<span>${esc(label)}</span></span>`
     : esc(label);
   return `<button type="button" class="btn ${cls}${next}" data-act="${esc(act)}"${idAttr}${hintAttr}>${inner}</button>`;
 }
