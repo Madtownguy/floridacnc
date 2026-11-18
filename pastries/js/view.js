@@ -403,6 +403,20 @@ export function coinSvg(size = 20) {
   </svg>`;
 }
 
+export function shopSvg(size = 22) {
+  return `<svg class="shop-mark" viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true">
+    <rect x="4" y="13" width="24" height="15" rx="2.5" fill="#fff6ee" stroke="#5c3a32" stroke-width="2"/>
+    <path d="M3 13 h26 l-2 -6 H5 Z" fill="#ff8fb8" stroke="#5c3a32" stroke-width="2" stroke-linejoin="round"/>
+    <rect x="6" y="8" width="4" height="5" fill="#fff6ee"/>
+    <rect x="14" y="8" width="4" height="5" fill="#fff6ee"/>
+    <rect x="22" y="8" width="4" height="5" fill="#fff6ee"/>
+    <rect x="7.5" y="17" width="8" height="6" rx="1" fill="#9fd4ff" stroke="#5c3a32" stroke-width="1.5"/>
+    <path d="M11.5 17 v6" stroke="#5c3a32" stroke-width="1.2"/>
+    <rect x="18.5" y="18" width="6" height="10" rx="1.2" fill="#f4b89a" stroke="#5c3a32" stroke-width="1.5"/>
+    <circle cx="22.6" cy="23.2" r="0.7" fill="#5c3a32"/>
+  </svg>`;
+}
+
 export function hintHandSvg() {
   return `<svg class="hint-pointer" viewBox="0 0 70 88" width="64" height="80" aria-hidden="true">
     <g fill="#f6c7a4" fill-opacity="0.78" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round">

@@ -567,6 +567,8 @@ h2, h3 { margin: 0; }
   vertical-align: middle;
 }
 .money b { font-weight: 800; }
+.btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.shop-mark { display: block; flex: none; }
 .coin { display: block; flex: none; }
 
 .is-next {
