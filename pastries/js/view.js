@@ -417,6 +417,40 @@ export function shopSvg(size = 22) {
   </svg>`;
 }
 
+export function bookSvg(size = 22) {
+  return `<svg class="btn-mark" viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true">
+    <path d="M7 6.5 h8.2 c1.6 1.8 1.6 16.2 0 18.3 H7 Z" fill="#fff6ee" stroke="#5c3a32" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M25 6.5 h-8.2 c-1.6 1.8 -1.6 16.2 0 18.3 H25 Z" fill="#ffd6e7" stroke="#5c3a32" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M16 8.2 v15" stroke="#5c3a32" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M9.2 12 h4.2 M9.2 16 h4.2" stroke="#e7b07a" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>`;
+}
+
+export function gearSvg(size = 22) {
+  return `<svg class="btn-mark" viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true">
+    <g fill="#ffe9a3" stroke="#5c3a32" stroke-width="1.7" stroke-linejoin="round">
+      <rect x="13.2" y="2.5" width="5.6" height="6" rx="1.2"/>
+      <rect x="13.2" y="23.5" width="5.6" height="6" rx="1.2"/>
+      <rect x="2.5" y="13.2" width="6" height="5.6" rx="1.2"/>
+      <rect x="23.5" y="13.2" width="6" height="5.6" rx="1.2"/>
+      <rect x="6.2" y="6.2" width="5.2" height="5.2" rx="1.2" transform="rotate(45 8.8 8.8)"/>
+      <rect x="20.6" y="6.2" width="5.2" height="5.2" rx="1.2" transform="rotate(45 23.2 8.8)"/>
+      <rect x="6.2" y="20.6" width="5.2" height="5.2" rx="1.2" transform="rotate(45 8.8 23.2)"/>
+      <rect x="20.6" y="20.6" width="5.2" height="5.2" rx="1.2" transform="rotate(45 23.2 23.2)"/>
+    </g>
+    <circle cx="16" cy="16" r="6.4" fill="#fff6ee" stroke="#5c3a32" stroke-width="2"/>
+    <circle cx="16" cy="16" r="2.5" fill="#ff8fb8" stroke="#5c3a32" stroke-width="1.6"/>
+  </svg>`;
+}
+
+export function noteSvg(size = 22) {
+  return `<svg class="btn-mark" viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true">
+    <ellipse cx="11" cy="23" rx="5" ry="3.6" fill="#c9b6ff" stroke="#5c3a32" stroke-width="2"/>
+    <ellipse cx="22.5" cy="20" rx="5" ry="3.6" fill="#ff8fb8" stroke="#5c3a32" stroke-width="2"/>
+    <path d="M15.6 23 V8.5 h9.2 V20" fill="none" stroke="#5c3a32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
 export function hintHandSvg() {
   return `<svg class="hint-pointer" viewBox="0 0 70 88" width="64" height="80" aria-hidden="true">
     <g fill="#f6c7a4" fill-opacity="0.78" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round">
