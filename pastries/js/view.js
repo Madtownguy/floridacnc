@@ -23,6 +23,7 @@ function frosting(topping, fallback) {
     case "lemon": return "#ffe56a";
     case "coconut": return "#fffdf6";
     case "sprinkles": return "#ffe9f3";
+    case "marshmallow": return "#fffaf6";
     default: return fallback;
   }
 }
@@ -53,7 +54,15 @@ function extras(topping, y) {
   if (topping === "coconut") {
     return `<path d="M30 ${y} l5 -2 M40 ${y + 2} l5 -2 M50 ${y} l5 -2" stroke="#f7f1e6" stroke-width="2" stroke-linecap="round"/>`;
   }
+  if (topping === "marshmallow") {
+    return puff(34, y, 5) + puff(46, y + 2, 4.5);
+  }
   return "";
+}
+
+function puff(cx, cy, r) {
+  return `<ellipse cx="${cx}" cy="${cy + 1}" rx="${r}" ry="${r * 0.72}" fill="#fff" stroke="${INK}" stroke-width="2"/>
+    <ellipse cx="${cx - r * 0.2}" cy="${cy - r * 0.15}" rx="${r * 0.28}" ry="${r * 0.16}" fill="#ffd0e0"/>`;
 }
 
 export function treatInner(treatId, toppingId = "plain") {
@@ -133,15 +142,17 @@ function steam() {
   return `<path d="M30 16 Q33 10 30 6 M40 14 Q43 8 40 4 M50 16 Q53 10 50 6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>`;
 }
 
-export function drinkInner(drinkId) {
+export function drinkInner(drinkId, floatId = null) {
+  const puffs = floatId === "marshmallow"
+    ? `${puff(30, 36, 5)}${puff(42, 34, 5)}${puff(36, 44, 4)}`
+    : "";
   if (drinkId === "hot-chocolate") {
     return `
       <path d="M20 32 H52 Q62 32 62 42 V56 Q62 70 50 70 H28 Q16 70 16 56 V42 Q16 32 20 32 Z" fill="#f3c7b0" stroke="${INK}" stroke-width="3"/>
       <path d="M22 40 H54 V56 Q54 64 46 64 H28 Q22 64 22 56 V40 Z" fill="#7a4632"/>
       <path d="M54 42 H62 Q70 42 70 50 Q70 58 62 58 H54" fill="none" stroke="${INK}" stroke-width="3"/>
-      <circle cx="30" cy="40" r="5" fill="#fff" stroke="${INK}" stroke-width="2"/>
-      <circle cx="42" cy="38" r="5" fill="#fff" stroke="${INK}" stroke-width="2"/>
-      <circle cx="36" cy="46" r="4" fill="#fff7ea" stroke="${INK}" stroke-width="2"/>
+      <ellipse cx="38" cy="40" rx="14" ry="4" fill="#5c3424" stroke="${INK}" stroke-width="2"/>
+      ${puffs}
       ${steam()}
     `;
   }
@@ -172,11 +183,15 @@ export function drinkInner(drinkId) {
   `;
 }
 
-export function drinkSvg(drinkId, size = 80) {
-  return wrap(drinkInner(drinkId), size, "0 0 80 80");
+export function drinkSvg(drinkId, size = 80, floatId = null) {
+  return wrap(drinkInner(drinkId, floatId), size, "0 0 80 80");
 }
 
 export function toppingSvg(toppingId, size = 56) {
+  if (toppingId === "marshmallow") {
+    const inner = `${puff(16, 30, 7)}${puff(30, 24, 8)}${puff(40, 34, 6)}`;
+    return wrap(inner, size, "0 0 56 56");
+  }
   const color = frosting(toppingId, "#ffe08a");
   const inner = `
     <ellipse cx="28" cy="40" rx="16" ry="10" fill="${color}" stroke="${INK}" stroke-width="3"/>

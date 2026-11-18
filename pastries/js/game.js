@@ -301,6 +301,10 @@ function onServe() {
     toast("Tap their drink too!");
     return;
   }
+  if (out.result === "need-float") {
+    toast("Tap marshmallows for the cocoa!");
+    return;
+  }
   if (out.result === "short") {
     const names = out.missing.map((item) => item.name.toLowerCase()).join(", ");
     toast(`You need ${names}. The shop can help!`);
@@ -354,6 +358,7 @@ function pickTreat(id) {
     treat: turningOff ? null : id,
     topping: turningOff ? null : (stillOk ? plate.topping : null),
     drink: turningOff ? null : (plate.drink || null),
+    float: turningOff ? null : (plate.float || null),
   });
   if (state.season.plate.treat === state.season.order.treat) maybeAdvance("treat");
   save(state);
@@ -383,6 +388,7 @@ function pickTopping(id) {
     treat: plate.treat,
     topping: plate.topping === id ? null : id,
     drink: plate.drink || null,
+    float: plate.float || null,
   });
   if (state.season.plate.treat === state.season.order.treat && state.season.plate.topping === state.season.order.topping) maybeAdvance("topping");
   save(state);
@@ -402,10 +408,30 @@ function pickDrink(id) {
     return;
   }
   const plate = state.season.plate || {};
+  const turningOff = plate.drink === id;
+  const nextDrink = turningOff ? null : id;
   state = setPlate(state, {
     treat: plate.treat || null,
     topping: plate.topping || null,
-    drink: plate.drink === id ? null : id,
+    drink: nextDrink,
+    float: nextDrink === "hot-chocolate" ? (plate.float || null) : null,
+  });
+  save(state);
+  render();
+}
+
+function pickFloat() {
+  if (ui.busy || !state.season?.order) return;
+  if (state.season.order.float !== "marshmallow") {
+    toast("No marshmallows this time!");
+    return;
+  }
+  const plate = state.season.plate || {};
+  state = setPlate(state, {
+    treat: plate.treat || null,
+    topping: plate.topping || null,
+    drink: plate.drink || null,
+    float: plate.float === "marshmallow" ? null : "marshmallow",
   });
   save(state);
   render();
@@ -487,6 +513,7 @@ function idleHint() {
     if (!plate.treat) return { target: "treat", text: "Tap this treat." };
     if (!plate.topping) return { target: "topping", text: "Tap this topping." };
     if (order?.drink && plate.drink !== order.drink) return { target: "drink", text: "Tap this drink." };
+    if (order?.float && plate.float !== order.float) return { target: "float", text: "Tap marshmallows!" };
     return { target: "serve", text: "Tap Serve!" };
   }
   return null;
@@ -676,6 +703,10 @@ function handle(act, id) {
   }
   if (act === "pick-drink") {
     pickDrink(id);
+    return;
+  }
+  if (act === "pick-float") {
+    pickFloat();
     return;
   }
   if (act === "clear" && state.season && !ui.busy) {
@@ -904,12 +935,12 @@ function renderPlay() {
       ${locked ? `<em>Lv ${drink.unlockLevel}</em>` : ""}
     </button>`;
   }).join("");
-  const drinkReady = !order.drink || plate.drink;
+  const drinkReady = (!order.drink || plate.drink) && (!order.float || plate.float);
   const needs = plate.treat && plate.topping && drinkReady
-    ? describeNeeds(totalNeeds(plate.treat, plate.topping, order.qty, plate.drink))
-    : (plate.treat && plate.topping && order.drink ? "Tap their drink" : "Pick a treat and a topping");
+    ? describeNeeds(totalNeeds(plate.treat, plate.topping, order.qty, plate.drink, plate.float))
+    : (plate.treat && plate.topping && order.float && plate.drink ? "Tap marshmallows" : (plate.treat && plate.topping && order.drink ? "Tap their drink" : "Pick a treat and a topping"));
   const missing = plate.treat && plate.topping && drinkReady
-    ? missingIngredients(state.pantry, totalNeeds(plate.treat, plate.topping, order.qty, plate.drink))
+    ? missingIngredients(state.pantry, totalNeeds(plate.treat, plate.topping, order.qty, plate.drink, plate.float))
     : [];
   const needNote = missing.length
     ? `Need ${missing.map((item) => `${item.short} ${item.name.toLowerCase()}`).join(", ")}`
@@ -939,7 +970,7 @@ function renderPlay() {
     </header>
     ${seasonMeter()}
     <div class="play-grid">
-      <div class="scene" data-order-treat="${esc(order.treat)}" data-order-topping="${esc(order.topping)}" data-order-drink="${esc(order.drink || "")}" data-order-qty="${order.qty}">
+      <div class="scene" data-order-treat="${esc(order.treat)}" data-order-topping="${esc(order.topping)}" data-order-drink="${esc(order.drink || "")}" data-order-float="${esc(order.float || "")}" data-order-qty="${order.qty}">
         ${bakerySvg(state)}
         <div class="bakery-door ${ui.phase === "entering" || ui.phase === "leaving" ? "is-open" : ""}" aria-hidden="true">
           <div class="door-frame"><div class="door-slab"><span class="door-glass"></span><span class="door-knob"></span></div></div>
@@ -949,7 +980,7 @@ function renderPlay() {
           <div class="bubble">
             <div class="order-art ${order.drink ? "has-drink" : ""} ${hint?.target === "order" ? "is-next" : ""}" data-hint="order">
               ${treatSvg(order.treat, order.topping, 104)}
-              ${order.drink ? drinkSvg(order.drink, 88) : ""}
+              ${order.drink ? drinkSvg(order.drink, 88, order.float) : ""}
             </div>
             <div>
               <p>${esc(line)}</p>
@@ -967,7 +998,7 @@ function renderPlay() {
           <div class="plate-row">
             <div class="plate">
               ${plate.treat ? treatSvg(plate.treat, plate.topping || "plain", 78) : emptyPlateSvg(78)}
-              ${plate.drink ? `<span class="sip">${drinkSvg(plate.drink, 56)}</span>` : ""}
+              ${plate.drink ? `<span class="sip">${drinkSvg(plate.drink, 56, plate.float)}</span>` : ""}
             </div>
             <div>
               <strong>${plate.treat ? esc(getTreat(plate.treat).name) : "Your tray"}</strong>
@@ -981,7 +1012,7 @@ function renderPlay() {
           ${canFill ? "" : textBtn("let-go", "Let them go kindly", "btn-quiet wide")}
         </div>
         <p class="row-label">Drinks</p>
-        <div class="scroller" data-scroller="drinks">${drinks}</div>
+        <div class="scroller" data-scroller="drinks">${order.drink === "hot-chocolate" ? `<button type="button" class="choice drink-choice ${plate.float === "marshmallow" ? "is-on" : ""}${hint?.target === "float" ? " is-next" : ""}" data-act="pick-float" data-hint="float" aria-pressed="${plate.float === "marshmallow"}">${toppingSvg("marshmallow", 40)}<span class="name">Marshmallow</span></button>` : ""}${drinks}</div>
         ${pantryHtml()}
         <div class="serve-row">
           ${ui.tutorial ? "" : textBtn("clear", "Clear", "btn-ghost")}
@@ -1084,7 +1115,7 @@ function renderHelp() {
     <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>How to play</h2></header>
     <ol class="steps">
       <li><b>1.</b> Read the customer's bubble. The picture is the order.</li>
-      <li><b>2.</b> Tap that treat, tap the topping, then tap Serve. If they want a drink, tap it too.</li>
+      <li><b>2.</b> Tap that treat, tap the topping, then tap Serve. If they want a drink, tap it too. Cocoa sometimes wants marshmallows.</li>
       <li><b>3.</b> A happy customer pays ${coinSvg(22)} Ingredients stay if the order is wrong.</li>
       <li><b>4.</b> A Selling Season is ${esc(formatDuration(SEASON_PLAY_MS))} of baking and shopping. Leave whenever you want. The minutes are saved, and they add up.</li>
       <li><b>5.</b> When the season timer fills, you unlock something new. The bakery never closes.</li>

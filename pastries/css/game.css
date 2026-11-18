@@ -302,6 +302,7 @@ h2, h3 { margin: 0; }
   box-shadow: var(--shadow);
   margin-bottom: 6%;
 }
+.bubble > div { min-width: 0; flex: 1; }
 .bubble p { margin: 0; font-weight: 800; line-height: 1.15; }
 .bubble small { color: var(--soft); font-weight: 800; }
 .order-art { flex: none; border-radius: 18px; display: flex; align-items: center; gap: 2px; }
@@ -487,12 +488,15 @@ h2, h3 { margin: 0; }
 }
 
 @media (max-width: 520px) and (orientation: portrait) {
-  .dock { max-height: 70%; }
+  .dock { max-height: 64%; }
   .choice { width: 84px; min-height: 80px; }
   .choice svg { width: 42px; height: 42px; }
-  .drink-choice { min-height: 68px; }
+  .drink-choice { width: 84px; min-height: 68px; padding: 4px; }
+  .drink-choice .name { font-size: 0.68rem; line-height: 1.05; }
   .plate-row { padding: 4px; }
   .plate svg { width: 60px; height: 60px; }
+  .order-art.has-drink svg { width: 48px; height: 48px; }
+  .bubble { margin-bottom: 2%; padding: 4px; }
 }
 
 @media (orientation: landscape) {
