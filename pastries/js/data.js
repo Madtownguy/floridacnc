@@ -81,21 +81,21 @@ const TREAT_RECIPES = {
     plural: "cupcakes",
     price: 8,
     needs: { flour: 1, sugar: 1, butter: 1 },
-    toppings: ["plain", "strawberry", "chocolate", "sprinkles", "honey", "lemon", "coconut"],
+    toppings: ["plain", "strawberry", "chocolate", "sprinkles", "marshmallow", "honey", "lemon", "coconut"],
   },
   cookie: {
     name: "Cookie",
     plural: "cookies",
     price: 7,
     needs: { flour: 1, sugar: 1, chocolate: 1 },
-    toppings: ["plain", "chocolate", "sprinkles", "coconut"],
+    toppings: ["plain", "chocolate", "sprinkles", "marshmallow", "coconut"],
   },
   donut: {
     name: "Donut",
     plural: "donuts",
     price: 9,
     needs: { flour: 1, sugar: 1, butter: 1 },
-    toppings: ["plain", "strawberry", "chocolate", "sprinkles", "caramel", "honey", "lemon", "coconut"],
+    toppings: ["plain", "strawberry", "chocolate", "sprinkles", "marshmallow", "caramel", "honey", "lemon", "coconut"],
   },
   pie: {
     name: "Pie",
@@ -109,7 +109,7 @@ const TREAT_RECIPES = {
     plural: "cakes",
     price: 15,
     needs: { flour: 2, sugar: 1, eggs: 1, butter: 1 },
-    toppings: ["plain", "strawberry", "chocolate", "blueberry", "sprinkles", "honey", "lemon", "coconut"],
+    toppings: ["plain", "strawberry", "chocolate", "blueberry", "sprinkles", "marshmallow", "honey", "lemon", "coconut"],
   },
   flan: {
     name: "Flan",
@@ -137,6 +137,7 @@ export const TOPPINGS = [
   { id: "strawberry", name: "Strawberry", phrase: "strawberry", unlockLevel: 1, needs: { fruit: 1 }, priceAdd: 2 },
   { id: "chocolate", name: "Chocolate", phrase: "chocolate", unlockLevel: 1, needs: { chocolate: 1 }, priceAdd: 2 },
   { id: "sprinkles", name: "Sprinkles", phrase: "sprinkles", unlockLevel: 1, needs: { sprinkles: 1 }, priceAdd: 2 },
+  { id: "marshmallow", name: "Marshmallow", phrase: "marshmallow", unlockLevel: 1, needs: { sugar: 1 }, priceAdd: 2 },
   { id: "caramel", name: "Caramel", phrase: "caramel", unlockLevel: 2, needs: { sugar: 1 }, priceAdd: 2 },
   { id: "blueberry", name: "Blueberry", phrase: "blueberry", unlockLevel: 3, needs: { fruit: 1 }, priceAdd: 2 },
   { id: "cream", name: "Cream", phrase: "whipped cream", unlockLevel: 5, needs: { milk: 1 }, priceAdd: 2 },
@@ -162,6 +163,9 @@ export const DRINKS = [
 
 /** About one customer in three also asks for a drink, after the first lesson. */
 export const DRINK_ORDER_CHANCE = 0.3;
+
+/** When the drink is hot chocolate, how often they also want marshmallows. */
+export const COCOA_MARSHMALLOW_CHANCE = 0.5;
 
 export const CUSTOMERS = [
   { id: "sunny", name: "Sunny", unlockLevel: 1, patience: 1, payBonus: 0, skin: "#f6c7a4", shirt: "#ff8fb8" },

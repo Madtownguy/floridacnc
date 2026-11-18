@@ -293,5 +293,52 @@ test("drinks are optional, priced, and old saves keep their coins", () => {
   assert.equal(loaded.season.order.treat, "cookie");
   assert.equal(loaded.season.order.drink, null);
   assert.equal(loaded.season.plate.drink, null);
+  assert.equal(loaded.season.order.float, null);
   assert.equal(loaded.pantry.milk, newGame().pantry.milk);
+});
+
+test("marshmallow is a starting topping and an optional cocoa add-on", () => {
+  const marshmallow = getTopping("marshmallow");
+  assert.equal(marshmallow.unlockLevel, 1);
+  assert.equal(marshmallow.priceAdd, 2);
+  assert.ok(getTreat("cupcake").toppings.includes("marshmallow"));
+  assert.ok(getTreat("cookie").toppings.includes("marshmallow"));
+  assert.equal(getTreat("pie").toppings.includes("marshmallow"), false);
+  const said = describeOrder({
+    treat: "cupcake", topping: "plain", qty: 1, customer: "sunny", drink: "hot-chocolate", float: "marshmallow",
+  });
+  assert.equal(said.line, "One vanilla cupcake and a hot chocolate with marshmallows, please!");
+  const plainCocoa = describeOrder({
+    treat: "cupcake", topping: "plain", qty: 1, customer: "sunny", drink: "hot-chocolate",
+  });
+  assert.equal(plainCocoa.line, "One vanilla cupcake and a hot chocolate, please!");
+
+  const fresh = { ...newGame(), tutorialDone: true };
+  const seq = [0, 0, 0, 0, 0, 0.1, 0, 0.3, 0];
+  let n = 0;
+  const cocoa = rollOrder(fresh, () => seq[n++] ?? 0);
+  assert.equal(cocoa.drink, "hot-chocolate");
+  assert.equal(cocoa.float, "marshmallow");
+  n = 0;
+  const skip = [0, 0, 0, 0, 0, 0.1, 0, 0.3, 0.9];
+  const noPuff = rollOrder(fresh, () => skip[n++] ?? 0);
+  assert.equal(noPuff.drink, "hot-chocolate");
+  assert.equal(noPuff.float, null);
+
+  let state = startSeason(newGame(), () => 0);
+  state = {
+    ...state,
+    season: {
+      ...state.season,
+      order: { treat: "cupcake", topping: "strawberry", qty: 1, customer: "sunny", vip: false, drink: "hot-chocolate", float: "marshmallow" },
+      plate: { treat: "cupcake", topping: "strawberry", drink: "hot-chocolate", float: null },
+    },
+  };
+  assert.equal(tryServe(state, { fast: false }).result, "need-float");
+  state = { ...state, season: { ...state.season, plate: { ...state.season.plate, float: "marshmallow" } } };
+  const sold = tryServe(state, { fast: false });
+  assert.equal(sold.result, "match");
+  assert.equal(sold.pay, 8 + 2 + 5 + 2);
+  assert.equal(sold.state.pantry.sugar, state.pantry.sugar - 2);
+  assert.equal(sold.state.coins, state.coins + sold.pay);
 });
