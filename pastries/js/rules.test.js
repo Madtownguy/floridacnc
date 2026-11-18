@@ -245,6 +245,27 @@ test("each Selling Season adds 30 coins once, on top of what she already has", (
   assert.equal(reopened.season.bonusPaid, true);
 });
 
+test("tutorial switch is saved and does not reset the bakery", () => {
+  const game = newGame();
+  assert.equal(game.tutorialOn, true);
+  game.coins = 55;
+  game.level = 3;
+  game.tutorialOn = false;
+  game.tutorialSeen = true;
+  const store = memory();
+  save(game, store);
+  const loaded = load(store);
+  assert.equal(loaded.tutorialOn, false);
+  assert.equal(loaded.tutorialSeen, true);
+  assert.equal(loaded.coins, 55);
+  assert.equal(loaded.level, 3);
+  store.setItem(STORAGE_KEY, JSON.stringify({ v: 1, coins: 40, level: 2 }));
+  const migrated = load(store);
+  assert.equal(migrated.tutorialOn, true);
+  assert.equal(migrated.coins, 40);
+  assert.equal(migrated.level, 2);
+});
+
 test("baker name defaults to Madison and stays short", () => {
   assert.equal(cleanBakerName(""), "Madison");
   assert.equal(cleanBakerName("  sam  "), "sam");

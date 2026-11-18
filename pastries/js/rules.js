@@ -38,6 +38,7 @@ export function newGame() {
     musicVolume: "medium",
     sfx: true,
     tutorialSeen: false,
+    tutorialOn: true,
     bakerName: "Madison",
     tutorialDone: false,
     pantry: {
@@ -127,6 +128,7 @@ export function normalize(data) {
     musicVolume: ["soft", "medium", "loud"].includes(data.musicVolume) ? data.musicVolume : "medium",
     sfx: data.sfx !== false,
     tutorialSeen: !!data.tutorialSeen,
+    tutorialOn: data.tutorialOn !== false,
     bakerName: cleanBakerName(data.bakerName),
     tutorialDone: !!data.tutorialDone,
     pantry: { ...base.pantry, ...(data.pantry || {}) },
