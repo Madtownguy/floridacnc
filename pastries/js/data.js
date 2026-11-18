@@ -37,12 +37,11 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * It pauses when the game is closed, paused, or sitting on the home screen.
  * Minutes already played are saved in localStorage, so short visits add up.
  *
- *   25 * 60 * 1000   twenty-five minutes (Madison's season)
+ *   20 * 60 * 1000   twenty minutes (Madison's season)
+ *   25 * 60 * 1000   twenty-five minutes
  *   35 * 60 * 1000   thirty-five minutes
- *   60 * 60 * 1000   one hour
- *   15 * 60 * 1000   fifteen minutes
  */
-export const SEASON_PLAY_MS = 25 * 60 * 1000;
+export const SEASON_PLAY_MS = 20 * 60 * 1000;
 
 /**
  * Coins added on top of her balance when a Selling Season begins.
@@ -168,6 +167,34 @@ export const DRINK_ORDER_CHANCE = 0.3;
 /** When the drink is hot chocolate, how often they also want marshmallows. */
 export const COCOA_MARSHMALLOW_CHANCE = 0.5;
 
+/**
+ * Drink-making steps, in order. Change this list to change how a drink is made.
+ * A step with when: "marshmallow" is used only when the order asks for marshmallows.
+ */
+export const DRINK_STEPS = {
+  coffee: [
+    { id: "cup", name: "Cup", hint: "Tap the cup!" },
+    { id: "pour-coffee", name: "Pour coffee", hint: "Pour the coffee!" },
+  ],
+  "hot-chocolate": [
+    { id: "mug", name: "Mug", hint: "Tap the mug!" },
+    { id: "cocoa", name: "Cocoa", hint: "Add the cocoa!" },
+    { id: "hot-milk", name: "Hot milk", hint: "Pour the hot milk!" },
+    { id: "stir", name: "Stir", hint: "Stir it!" },
+    { id: "marshmallow", name: "Marshmallow", hint: "Add marshmallows!", when: "marshmallow" },
+  ],
+  milk: [
+    { id: "glass", name: "Glass", hint: "Tap the glass!" },
+    { id: "pour-milk", name: "Pour milk", hint: "Pour the milk!" },
+  ],
+  "chocolate-milk": [
+    { id: "glass", name: "Glass", hint: "Tap the glass!" },
+    { id: "milk", name: "Milk", hint: "Pour the milk!" },
+    { id: "chocolate", name: "Chocolate", hint: "Add the chocolate!" },
+    { id: "stir", name: "Stir", hint: "Stir it!" },
+  ],
+};
+
 export const CUSTOMERS = [
   { id: "sunny", name: "Sunny", unlockLevel: 1, patience: 1, payBonus: 0, skin: "#f6c7a4", shirt: "#ff8fb8" },
   { id: "pip", name: "Pip", unlockLevel: 1, patience: 1, payBonus: 0, skin: "#f8d7b8", shirt: "#ffd166" },
@@ -273,8 +300,9 @@ export const TUTORIAL_STEPS = [
   { id: "order", text: "This picture is the order!" },
   { id: "treat", text: "Tap this treat.", waitFor: "treat" },
   { id: "topping", text: "Tap this topping.", waitFor: "topping" },
+  { id: "sip", text: "Make the drink. Tap the glass, then pour.", waitFor: "sip" },
   { id: "serve", text: "Tap Serve to get paid!", waitFor: "serve" },
-  { id: "clock", text: "This bar is your Selling Season. Sometimes they want a drink too.", cta: "Let's bake!" },
+  { id: "clock", text: "This bar is your Selling Season. Drinks are one tap at a time.", cta: "Let's bake!" },
 ];
 
 export const THANKS = [

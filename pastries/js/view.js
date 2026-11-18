@@ -187,6 +187,44 @@ export function drinkSvg(drinkId, size = 80, floatId = null) {
   return wrap(drinkInner(drinkId, floatId), size, "0 0 80 80");
 }
 
+export function sipSvg(stepId, size = 64) {
+  const cup = `<path d="M18 28 H46 Q54 28 54 36 V52 Q54 64 42 64 H26 Q14 64 14 52 V36 Q14 28 18 28 Z" fill="#fff" stroke="${INK}" stroke-width="3"/>
+    <path d="M46 36 H54 Q62 36 62 44 Q62 52 54 52 H46" fill="none" stroke="${INK}" stroke-width="3"/>`;
+  const glass = `<path d="M24 18 H56 L52 66 H28 Z" fill="#f7fbff" stroke="${INK}" stroke-width="3"/>
+    <ellipse cx="40" cy="18" rx="16" ry="5" fill="#fff" stroke="${INK}" stroke-width="3"/>`;
+  let inner = cup;
+  if (stepId === "glass") inner = glass;
+  if (stepId === "pour-coffee") {
+    inner = `${cup}<path d="M34 8 C34 20 46 18 46 30" fill="none" stroke="#6b3a24" stroke-width="4" stroke-linecap="round"/>
+      <path d="M22 42 H48 V54 Q48 60 40 60 Q32 60 32 54 V42 Z" fill="#6b3a24"/>`;
+  }
+  if (stepId === "mug") inner = cup.replace("#fff", "#f3c7b0");
+  if (stepId === "cocoa") {
+    inner = `<rect x="22" y="26" width="36" height="32" rx="6" fill="#c4844a" stroke="${INK}" stroke-width="3"/>
+      <rect x="28" y="18" width="24" height="12" rx="4" fill="#7a4632" stroke="${INK}" stroke-width="3"/>
+      <circle cx="34" cy="42" r="3" fill="#5c3424"/><circle cx="44" cy="46" r="3" fill="#5c3424"/>`;
+  }
+  if (stepId === "hot-milk" || stepId === "pour-milk" || stepId === "milk") {
+    inner = `<path d="M24 26 H44 L48 58 H20 Z" fill="#fff" stroke="${INK}" stroke-width="3"/>
+      <path d="M44 32 H58" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>
+      <path d="M50 32 Q62 40 50 50" fill="none" stroke="#d7ecff" stroke-width="4" stroke-linecap="round"/>
+      ${stepId === "hot-milk" ? `<path d="M30 16 Q33 10 30 6 M38 14 Q41 8 38 4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>` : ""}`;
+  }
+  if (stepId === "chocolate") {
+    inner = `<rect x="18" y="28" width="44" height="28" rx="4" fill="#7a4632" stroke="${INK}" stroke-width="3"/>
+      <path d="M32 28 V56 M46 28 V56 M18 42 H62" stroke="#5c3424" stroke-width="2"/>`;
+  }
+  if (stepId === "stir") {
+    inner = `<ellipse cx="40" cy="58" rx="18" ry="6" fill="#f3c7b0" stroke="${INK}" stroke-width="3"/>
+      <path d="M40 54 V16" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>
+      <ellipse cx="40" cy="14" rx="8" ry="4" fill="#ffd6e4" stroke="${INK}" stroke-width="2"/>`;
+  }
+  if (stepId === "marshmallow") {
+    inner = `${puff(24, 40, 8)}${puff(40, 32, 9)}${puff(52, 44, 7)}`;
+  }
+  return wrap(inner, size, "0 0 80 80");
+}
+
 export function toppingSvg(toppingId, size = 56) {
   if (toppingId === "marshmallow") {
     const inner = `${puff(16, 30, 7)}${puff(30, 24, 8)}${puff(40, 34, 6)}`;
