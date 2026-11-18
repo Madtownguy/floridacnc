@@ -71,6 +71,7 @@ export function normalize(data) {
       const resolved = season.resolved === "sold" || season.resolved === "leave" ? season.resolved : null;
       season = {
         playedMs: clampInt(season.playedMs, 0, 24 * 60 * 60 * 1000, 0),
+        limitMs: migratedLimit(season),
         earned: clampInt(season.earned, 0, 999999, 0),
         special,
         sold: clampInt(season.sold, 0, 999999, 0),
@@ -125,6 +126,20 @@ function validMusic(id) {
   if (id === "off") return "off";
   if (MUSIC_TRACKS.some((track) => track.id === id)) return id;
   return "off";
+}
+
+function migratedLimit(season) {
+  const played = clampInt(season?.playedMs, 0, 24 * 60 * 60 * 1000, 0);
+  const saved = Number(season?.limitMs);
+  if (Number.isFinite(saved) && saved > 0) {
+    return clampInt(saved, 1, 24 * 60 * 60 * 1000, SEASON_PLAY_MS);
+  }
+  // Older saves used a 35-minute season and did not store their own length.
+  // Keep the minutes already played, and don't leave more than 25 minutes to go.
+  const previous = 35 * 60 * 1000;
+  const oldRemaining = Math.max(0, previous - played);
+  const remaining = Math.min(oldRemaining, SEASON_PLAY_MS);
+  return played + remaining;
 }
 
 function clampInt(value, min, max, fallback) {
@@ -194,6 +209,12 @@ export function formatDuration(ms) {
 }
 
 /** Friendly clock text. The length always comes from SEASON_PLAY_MS. */
+export function seasonLimit(season) {
+  const saved = Number(season?.limitMs);
+  if (Number.isFinite(saved) && saved > 0) return saved;
+  return SEASON_PLAY_MS;
+}
+
 export function clockLabel(playedMs, total = SEASON_PLAY_MS) {
   const played = Math.max(0, playedMs || 0);
   const left = Math.max(0, total - played);
@@ -217,7 +238,7 @@ export function clockLabel(playedMs, total = SEASON_PLAY_MS) {
   return `${minsLeft} min until your next unlock`;
 }
 
-export function seasonClock(season, total = SEASON_PLAY_MS) {
+export function seasonClock(season, total = seasonLimit(season)) {
   const playedRaw = Math.max(0, season?.playedMs || 0);
   const played = Math.min(total, playedRaw);
   const left = Math.max(0, total - played);
@@ -234,7 +255,7 @@ export function seasonClock(season, total = SEASON_PLAY_MS) {
   };
 }
 
-export function seasonTimeUp(season, total = SEASON_PLAY_MS) {
+export function seasonTimeUp(season, total = seasonLimit(season)) {
   return !!season && (season.playedMs || 0) >= total;
 }
 
@@ -242,7 +263,7 @@ export function seasonTimeUp(season, total = SEASON_PLAY_MS) {
  * Add active play time. dt is milliseconds the page was actually open
  * on the baking or shop screen. Closing the page does not add the gap.
  */
-export function addPlaytime(state, dtMs, total = SEASON_PLAY_MS) {
+export function addPlaytime(state, dtMs, total = seasonLimit(state.season)) {
   if (!state.season) return { state, justFinished: false, timeUp: false };
   const prev = state.season.playedMs || 0;
   const dt = Number.isFinite(dtMs) ? Math.max(0, dtMs) : 0;
@@ -458,6 +479,7 @@ export function startSeason(state, rng = Math.random) {
     resolved: null,
     lastPay: 0,
     bonusPaid: true,
+    limitMs: SEASON_PLAY_MS,
     plate: blankPlate(),
     order: null,
   };
@@ -566,6 +588,7 @@ export function takeResolution(state) {
     resolved: null,
     lastPay: 0,
     bonusPaid: season.bonusPaid !== false,
+    limitMs: seasonLimit(season),
     plate: blankPlate(),
     order: null,
   };

@@ -37,11 +37,12 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * It pauses when the game is closed, paused, or sitting on the home screen.
  * Minutes already played are saved in localStorage, so short visits add up.
  *
- *   35 * 60 * 1000   thirty-five minutes (Madison's season)
+ *   25 * 60 * 1000   twenty-five minutes (Madison's season)
+ *   35 * 60 * 1000   thirty-five minutes
  *   60 * 60 * 1000   one hour
  *   15 * 60 * 1000   fifteen minutes
  */
-export const SEASON_PLAY_MS = 35 * 60 * 1000;
+export const SEASON_PLAY_MS = 25 * 60 * 1000;
 
 /**
  * Coins added on top of her balance when a Selling Season begins.
