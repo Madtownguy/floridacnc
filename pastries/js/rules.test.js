@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DRINK_ORDER_CHANCE, DRINKS, GAME_VERSION, MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, UPDATES, bakeryStickerText, cleanBakerName } from "./data.js";
+import { DRINK_ORDER_CHANCE, DRINKS, GAME_VERSION, MUSIC_TRACKS, PARTY_EVENTS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, UPDATES, bakeryStickerText, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
   applySip,
@@ -689,12 +689,13 @@ test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () 
 });
 
 test("what's new shows once per version and keeps the bakery", () => {
-  assert.equal(GAME_VERSION, "2");
+  assert.equal(GAME_VERSION, "3");
   assert.equal(UPDATES[0].version, GAME_VERSION);
   assert.deepEqual(UPDATES[0].lines, [
-    "🎉 Custom Orders! Decorate cakes for parties!",
+    "💒 Wedding cakes and 🛌 Sleepover cakes in Custom Orders!",
   ]);
-  assert.equal(UPDATES[1].version, "1");
+  assert.equal(UPDATES[1].version, "2");
+  assert.equal(UPDATES[2].version, "1");
   assert.equal(newGame().seenVersion, "");
   const store = memory();
   store.setItem(STORAGE_KEY, JSON.stringify({
@@ -814,4 +815,74 @@ test("custom party cakes pay more for a full match and stay kind", () => {
   assert.equal(loaded.mail[0].kind, "custom");
   assert.equal(loaded.mail[0].wish.frosting, "strawberry");
   assert.equal(loaded.mail[0].made.ribbon, "gold");
+});
+
+test("wedding cakes are fancier and sleepover cakes stay cozy", () => {
+  assert.deepEqual(PARTY_EVENTS.map((event) => event.id), ["birthday", "graduation", "holiday", "wedding", "sleepover"]);
+  const weddingEvent = PARTY_EVENTS.find((event) => event.id === "wedding");
+  const sleepEvent = PARTY_EVENTS.find((event) => event.id === "sleepover");
+  assert.equal(weddingEvent.emoji, "💒");
+  assert.equal(sleepEvent.emoji, "🛌");
+  assert.ok(weddingEvent.bonus > 8);
+  assert.ok(weddingEvent.frosting.includes("plain"));
+  assert.ok(sleepEvent.toppings.includes("marshmallow"));
+  assert.ok(sleepEvent.toppings.includes("sprinkles"));
+  assert.ok(sleepEvent.frosting.every((id) => ["plain", "strawberry", "lemon", "blueberry"].includes(id)));
+
+  const values = [0.61, 0, 0, 0, 0, 0, 0];
+  let n = 0;
+  const wedding = rollCustomJob(newGame(), () => values[n++] ?? 0);
+  assert.equal(wedding.event, "wedding");
+  assert.equal(wedding.wish.frosting, "plain");
+  assert.equal(wedding.wish.topping, "sprinkles");
+  assert.equal(wedding.wish.extra, "berries");
+  assert.equal(wedding.wish.ribbon, "gold");
+  assert.equal(wedding.wish.ribbon2, "pink");
+  assert.notEqual(wedding.wish.ribbon, wedding.wish.ribbon2);
+
+  n = 0;
+  const sleep = rollCustomJob(newGame(), () => [0.85, 0, 0, 0, 0][n++] ?? 0);
+  assert.equal(sleep.event, "sleepover");
+  assert.equal(sleep.wish.frosting, "plain");
+  assert.equal(sleep.wish.topping, "marshmallow");
+  assert.equal(sleep.wish.extra, null);
+  assert.equal(sleep.wish.ribbon2, null);
+
+  const made = {
+    frosting: wedding.wish.frosting,
+    topping: wedding.wish.topping,
+    extra: wedding.wish.extra,
+    ribbon: wedding.wish.ribbon,
+    ribbon2: wedding.wish.ribbon2,
+    sticker: true,
+  };
+  const full = scoreCustom({ ...wedding, made });
+  assert.equal(full.full, true);
+  assert.equal(full.matched, 6);
+  assert.equal(full.bonus, 16);
+  const birthday = scoreCustom({
+    event: "birthday",
+    wish: { frosting: "strawberry", topping: "sprinkles", ribbon: "gold", sticker: true },
+    made: { frosting: "strawberry", topping: "sprinkles", ribbon: "gold", sticker: true },
+  });
+  assert.equal(birthday.matched, 4);
+  assert.ok(customPay(newGame(), full) > customPay(newGame(), birthday));
+  const partial = scoreCustom({ ...wedding, made: { ...made, extra: "sprinkles", ribbon2: null, sticker: false } });
+  assert.equal(partial.full, false);
+  assert.ok(customPay(newGame(), partial) > 0);
+  assert.ok(customPay(newGame(), partial) < customPay(newGame(), full));
+  for (const event of PARTY_EVENTS) {
+    for (const score of [
+      { matched: 0, total: 4, full: false },
+      { matched: 2, total: 4, full: false },
+      { matched: event.fancy ? 6 : 4, total: event.fancy ? 6 : 4, full: true },
+    ]) {
+      const said = customNote(score, event.id);
+      assert.ok(said.length > 8, said);
+      assert.doesNotMatch(said, /wrong|bad|miss|fail|nope|terrible/i);
+    }
+  }
+  assert.match(customNote({ matched: 6, full: true }, "wedding"), /wedding|fancy|beautiful/i);
+  assert.match(customNote({ matched: 0, full: false }, "sleepover"), /sleepover|glad/i);
+  assert.match(customNote({ matched: 4, full: true }, "birthday"), /hoped/);
 });

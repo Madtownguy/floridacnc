@@ -42,9 +42,15 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * with that same version. The card lists that entry's lines once,
  * the first time the game opens after the version changes.
  */
-export const GAME_VERSION = "2";
+export const GAME_VERSION = "3";
 
 export const UPDATES = [
+  {
+    version: "3",
+    lines: [
+      "💒 Wedding cakes and 🛌 Sleepover cakes in Custom Orders!",
+    ],
+  },
   {
     version: "2",
     lines: [
@@ -241,11 +247,77 @@ export const RIBBONS = [
   { id: "gold", name: "Gold", color: "#e8b931" },
 ];
 
-/** Party cakes in Orders. Decorations are toppings and ribbons already in the game. */
+/** Party cakes in Orders. Each event uses toppings and ribbons already in the game.
+ *  Wedding asks for a second ribbon and an extra decoration, and pays a bigger bonus.
+ */
 export const PARTY_EVENTS = [
-  { id: "birthday", name: "Birthday" },
-  { id: "graduation", name: "Graduation" },
-  { id: "holiday", name: "Holiday" },
+  {
+    id: "birthday",
+    name: "Birthday",
+    emoji: "🎂",
+    frosting: ["plain", "strawberry", "chocolate", "blueberry", "caramel"],
+    toppings: ["sprinkles", "marshmallow", "berries", "chocolate"],
+    ribbons: ["pink", "gold", "red", "blue", "purple"],
+    notes: {
+      full: ["This is just what they hoped for!", "Happy birthday! The cake is perfect!"],
+      partial: ["They love the birthday cake you made!"],
+      kind: ["They are so glad you baked for their birthday!"],
+    },
+  },
+  {
+    id: "graduation",
+    name: "Graduation",
+    emoji: "🎓",
+    frosting: ["chocolate", "blueberry", "plain", "honey"],
+    toppings: ["sprinkles", "chocolate", "berries"],
+    ribbons: ["blue", "gold", "purple"],
+    notes: {
+      full: ["They hoped for a cake this proud!", "You did it! What a graduation cake!"],
+      partial: ["They love this graduation cake!"],
+      kind: ["They are so glad you baked for their graduation!"],
+    },
+  },
+  {
+    id: "holiday",
+    name: "Holiday",
+    emoji: "🎄",
+    frosting: ["strawberry", "plain", "chocolate", "honey"],
+    toppings: ["sprinkles", "berries", "marshmallow"],
+    ribbons: ["red", "gold", "pink"],
+    notes: {
+      full: ["This is just what they hoped for the holiday!", "The holiday cake is so cheerful!"],
+      partial: ["They love the holiday cake you made!"],
+      kind: ["They are so glad you baked for their holiday!"],
+    },
+  },
+  {
+    id: "wedding",
+    name: "Wedding",
+    emoji: "💒",
+    fancy: true,
+    bonus: 16,
+    frosting: ["plain", "strawberry", "lemon", "blueberry"],
+    toppings: ["sprinkles", "berries", "cream", "coconut"],
+    ribbons: ["gold", "pink", "purple", "blue"],
+    notes: {
+      full: ["What a beautiful wedding cake!", "So fancy! They hoped for a cake like this!"],
+      partial: ["They love how fancy you made it!"],
+      kind: ["They are so glad you baked for their wedding!"],
+    },
+  },
+  {
+    id: "sleepover",
+    name: "Sleepover",
+    emoji: "🛌",
+    frosting: ["plain", "strawberry", "lemon", "blueberry"],
+    toppings: ["marshmallow", "sprinkles"],
+    ribbons: ["pink", "purple", "blue"],
+    notes: {
+      full: ["Cozy and perfect for the sleepover!", "They hoped for a cake this snuggly!"],
+      partial: ["They love this sleepover cake!"],
+      kind: ["They are so glad you baked for their sleepover!"],
+    },
+  },
 ];
 
 export const PARTY_FROSTING = ["plain", "strawberry", "chocolate", "caramel", "blueberry", "lemon", "honey"];

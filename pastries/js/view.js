@@ -528,16 +528,21 @@ function xml(value) {
   return String(value).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 }
 
-export function mailBoxSvg({ packed = 0, closed = false, ribbon = null, sticker = null, label = "" } = {}, size = 150) {
+export function mailBoxSvg({ packed = 0, closed = false, ribbon = null, ribbon2 = null, sticker = null, label = "" } = {}, size = 150) {
   const treats = Array.from({ length: Math.min(packed, 3) }, (_, i) => {
     const x = 48 + i * 22;
     return `<circle cx="${x}" cy="78" r="8" fill="${["#ff8fb8", "#ffe08a", "#9fd4ff"][i]}" stroke="#5c3a32" stroke-width="2"/>`;
   }).join("");
   const color = RIBBONS.find((item) => item.id === ribbon)?.color || null;
+  const color2 = RIBBONS.find((item) => item.id === ribbon2)?.color || null;
   const bow = color ? `
-    <path d="M70 34 V92" stroke="${color}" stroke-width="10" stroke-linecap="round"/>
-    <path d="M70 50 C52 36 46 54 70 60 C94 54 88 36 70 50 Z" fill="${color}" stroke="#5c3a32" stroke-width="2"/>
-    <path d="M62 58 L54 74 M78 58 L86 74" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round"/>
+    <path d="M64 34 V92" stroke="${color}" stroke-width="10" stroke-linecap="round"/>
+    <path d="M64 50 C46 36 40 54 64 60 C88 54 82 36 64 50 Z" fill="${color}" stroke="#5c3a32" stroke-width="2"/>
+    <path d="M56 58 L48 74 M72 58 L80 74" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round"/>
+  ` : "";
+  const bow2 = color2 ? `
+    <path d="M84 38 V86" stroke="${color2}" stroke-width="7" stroke-linecap="round"/>
+    <path d="M84 46 C98 34 106 50 84 56 C62 50 70 34 84 46 Z" fill="${color2}" stroke="#5c3a32" stroke-width="2"/>
   ` : "";
   const lines = String(label || "").split(" ");
   const title = lines.slice(0, -1).join(" ") || lines[0] || "";
@@ -558,6 +563,7 @@ export function mailBoxSvg({ packed = 0, closed = false, ribbon = null, sticker 
     ${closed ? "" : treats}
     ${lid}
     ${bow}
+    ${bow2}
     ${seal}
   `;
   return wrap(inner, size, "0 0 140 140");

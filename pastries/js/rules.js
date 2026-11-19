@@ -570,7 +570,11 @@ function rollMailItem(state, rng) {
 }
 
 function blankCustomMade() {
-  return { frosting: null, topping: null, ribbon: null, sticker: false };
+  return { frosting: null, topping: null, extra: null, ribbon: null, ribbon2: null, sticker: false };
+}
+
+function partyEvent(id) {
+  return PARTY_EVENTS.find((item) => item.id === id) || PARTY_EVENTS[0];
 }
 
 function partyChoices(ids, level) {
@@ -578,18 +582,30 @@ function partyChoices(ids, level) {
   return open.length ? open : [getTopping("plain")].filter(Boolean);
 }
 
+function ribbonChoices(ids) {
+  const open = ids.map((id) => RIBBONS.find((ribbon) => ribbon.id === id)).filter(Boolean);
+  return open.length ? open : RIBBONS;
+}
+
 export function rollCustomJob(state, rng = Math.random) {
-  const event = pick(PARTY_EVENTS, rng).id;
+  const event = pick(PARTY_EVENTS, rng);
   const customer = pick(unlockedCustomers(state.level), rng).id;
-  const frosting = pick(partyChoices(PARTY_FROSTING, state.level), rng).id;
-  const topping = pick(partyChoices(PARTY_TOPPINGS, state.level), rng).id;
-  const ribbon = pick(RIBBONS, rng).id;
+  const frostings = partyChoices(event.frosting, state.level);
+  const toppings = partyChoices(event.toppings, state.level);
+  const ribbons = ribbonChoices(event.ribbons);
+  const frosting = pick(frostings, rng).id;
+  const topping = pick(toppings, rng).id;
+  const ribbon = pick(ribbons, rng).id;
+  const extraPool = toppings.filter((top) => top.id !== topping);
+  const extra = event.fancy ? pick(extraPool.length ? extraPool : toppings, rng).id : null;
+  const ribbonPool = ribbons.filter((item) => item.id !== ribbon);
+  const ribbon2 = event.fancy ? pick(ribbonPool.length ? ribbonPool : ribbons, rng).id : null;
   return {
     kind: "custom",
-    id: `party-${event}-${customer}-${frosting}`,
+    id: `party-${event.id}-${customer}-${frosting}`,
     customer,
-    event,
-    wish: { frosting, topping, ribbon, sticker: true },
+    event: event.id,
+    wish: { frosting, topping, extra, ribbon, ribbon2, sticker: true },
     made: blankCustomMade(),
     items: [{ treat: "cake", topping: frosting, drink: null, float: null }],
     packed: 0,
@@ -642,18 +658,27 @@ function cleanMailItem(item, level) {
 }
 
 function cleanCustomJob(job, state, rng) {
-  const event = PARTY_EVENTS.some((item) => item.id === job?.event) ? job.event : null;
-  if (!event || !job.wish) return rollPlainMailJob(state, rng);
-  const frostings = partyChoices(PARTY_FROSTING, state.level);
-  const toppings = partyChoices(PARTY_TOPPINGS, state.level);
-  const frosting = frostings.some((top) => top.id === job.wish.frosting) ? job.wish.frosting : frostings[0].id;
-  const topping = toppings.some((top) => top.id === job.wish.topping) ? job.wish.topping : toppings[0].id;
-  const ribbon = RIBBONS.some((item) => item.id === job.wish.ribbon) ? job.wish.ribbon : RIBBONS[0].id;
+  const event = partyEvent(job?.event);
+  if (!PARTY_EVENTS.some((item) => item.id === job?.event) || !job.wish) return rollPlainMailJob(state, rng);
+  const frostings = partyChoices(event.frosting, state.level);
+  const toppings = partyChoices(event.toppings, state.level);
+  const knownTop = (id) => partyChoices(PARTY_FROSTING.concat(PARTY_TOPPINGS), state.level).some((top) => top.id === id);
+  const frosting = knownTop(job.wish.frosting) ? job.wish.frosting : frostings[0].id;
+  const topping = knownTop(job.wish.topping) ? job.wish.topping : toppings[0].id;
+  const ribbon = RIBBONS.some((item) => item.id === job.wish.ribbon) ? job.wish.ribbon : ribbonChoices(event.ribbons)[0].id;
+  const extra = event.fancy
+    ? (knownTop(job.wish.extra) ? job.wish.extra : toppings.find((top) => top.id !== topping)?.id || toppings[0].id)
+    : null;
+  const ribbon2 = event.fancy
+    ? (RIBBONS.some((item) => item.id === job.wish.ribbon2) ? job.wish.ribbon2 : ribbonChoices(event.ribbons).find((item) => item.id !== ribbon)?.id || ribbon)
+    : null;
   const made = job.made && typeof job.made === "object" ? job.made : {};
   const cleanMade = {
-    frosting: frostings.some((top) => top.id === made.frosting) ? made.frosting : null,
-    topping: toppings.some((top) => top.id === made.topping) ? made.topping : null,
+    frosting: knownTop(made.frosting) ? made.frosting : null,
+    topping: knownTop(made.topping) ? made.topping : null,
+    extra: knownTop(made.extra) ? made.extra : null,
     ribbon: RIBBONS.some((item) => item.id === made.ribbon) ? made.ribbon : null,
+    ribbon2: RIBBONS.some((item) => item.id === made.ribbon2) ? made.ribbon2 : null,
     sticker: !!made.sticker,
   };
   const packed = job.packed >= 1 ? 1 : 0;
@@ -661,10 +686,10 @@ function cleanCustomJob(job, state, rng) {
   const customer = person.unlockLevel <= state.level ? person.id : unlockedCustomers(state.level)[0].id;
   return {
     kind: "custom",
-    id: typeof job.id === "string" && job.id ? job.id : `party-${event}-${customer}`,
+    id: typeof job.id === "string" && job.id ? job.id : `party-${event.id}-${customer}`,
     customer,
-    event,
-    wish: { frosting, topping, ribbon, sticker: true },
+    event: event.id,
+    wish: { frosting, topping, extra, ribbon, ribbon2, sticker: true },
     made: cleanMade,
     items: [{ treat: "cake", topping: frosting, drink: null, float: null }],
     packed,
@@ -728,34 +753,49 @@ export function scoreCustom(job) {
     !!wish.ribbon && wish.ribbon === made.ribbon,
     !!wish.sticker === !!made.sticker && !!wish.sticker,
   ];
+  if (wish.extra) checks.push(wish.extra === made.extra);
+  if (wish.ribbon2) checks.push(wish.ribbon2 === made.ribbon2);
   const matched = checks.filter(Boolean).length;
-  return { matched, total: checks.length, full: matched === checks.length };
+  const event = partyEvent(job?.event);
+  return { matched, total: checks.length, full: matched === checks.length, bonus: event?.bonus || 8 };
 }
 
 export function customPay(state, score) {
   let coins = getTreat("cake")?.price || 12;
   coins += (score?.matched || 0) * 3;
-  if (score?.full) coins += 8;
+  if (score?.full) coins += score?.bonus || 8;
   if (state?.upgrades?.tipJar) coins += 2;
   return coins;
 }
 
-export function customNote(score) {
-  if (score?.full) return "This is just what they hoped for!";
-  if ((score?.matched || 0) >= 2) return "They love the cake you made!";
-  return "They are so glad you baked for their party!";
+function noteLine(lines, salt) {
+  const list = Array.isArray(lines) ? lines.filter(Boolean) : [lines];
+  if (!list.length) return "They are so glad you baked for them!";
+  return list[Math.abs(salt || 0) % list.length];
+}
+
+export function customNote(score, eventId) {
+  const notes = partyEvent(eventId)?.notes || {};
+  if (score?.full) return noteLine(notes.full, score.matched);
+  if ((score?.matched || 0) >= 2) return noteLine(notes.partial, score.matched);
+  return noteLine(notes.kind, score.matched);
 }
 
 export function describeCustomWish(job) {
   const frost = getTopping(job?.wish?.frosting);
   const top = getTopping(job?.wish?.topping);
+  const extra = getTopping(job?.wish?.extra);
   const ribbon = RIBBONS.find((item) => item.id === job?.wish?.ribbon);
-  return [
+  const ribbon2 = RIBBONS.find((item) => item.id === job?.wish?.ribbon2);
+  const lines = [
     `${frost?.name || "Vanilla"} frosting`,
     top?.name || "Sprinkles",
-    `${ribbon?.name || "Pink"} ribbon`,
-    "Your bakery sticker",
   ];
+  if (extra) lines.push(`${extra.name} too`);
+  lines.push(`${ribbon?.name || "Pink"} ribbon`);
+  if (ribbon2) lines.push(`${ribbon2.name} ribbon too`);
+  lines.push("Your bakery sticker");
+  return lines;
 }
 
 export function setCustomDecor(state, index, patch) {
@@ -768,8 +808,14 @@ export function setCustomDecor(state, index, patch) {
   if (patch.topping && partyChoices(PARTY_TOPPINGS, state.level).some((top) => top.id === patch.topping)) {
     made.topping = made.topping === patch.topping ? null : patch.topping;
   }
+  if (patch.extra && partyChoices(PARTY_TOPPINGS, state.level).some((top) => top.id === patch.extra)) {
+    made.extra = made.extra === patch.extra ? null : patch.extra;
+  }
   if (patch.ribbon && RIBBONS.some((ribbon) => ribbon.id === patch.ribbon)) {
     made.ribbon = made.ribbon === patch.ribbon ? null : patch.ribbon;
+  }
+  if (patch.ribbon2 && RIBBONS.some((ribbon) => ribbon.id === patch.ribbon2)) {
+    made.ribbon2 = made.ribbon2 === patch.ribbon2 ? null : patch.ribbon2;
   }
   if (patch.sticker === "toggle") made.sticker = !made.sticker;
   const mail = state.mail.slice();
@@ -787,9 +833,12 @@ export function packCustom(state, index) {
   if (!job || job.kind !== "custom" || job.closed || job.packed >= 1) return { state, ok: false, reason: "done" };
   if (!job.made?.frosting) return { state, ok: false, reason: "incomplete" };
   const needs = totalNeeds("cake", job.made.frosting, 1);
-  if (job.made.topping && job.made.topping !== job.made.frosting) {
-    const extra = getTopping(job.made.topping)?.needs || {};
-    for (const [id, n] of Object.entries(extra)) needs[id] = (needs[id] || 0) + n;
+  const addNeeds = (src) => {
+    for (const [id, n] of Object.entries(src || {})) needs[id] = (needs[id] || 0) + n;
+  };
+  if (job.made.topping && job.made.topping !== job.made.frosting) addNeeds(getTopping(job.made.topping)?.needs);
+  if (job.made.extra && job.made.extra !== job.made.frosting && job.made.extra !== job.made.topping) {
+    addNeeds(getTopping(job.made.extra)?.needs);
   }
   const missing = missingIngredients(state.pantry, needs);
   if (missing.length) return { state, ok: false, reason: "short", missing };
@@ -890,7 +939,7 @@ export function shipMail(state, index, rng = Math.random) {
       state: { ...state, coins: state.coins + pay, mail },
       ok: true,
       pay,
-      note: customNote(score),
+      note: customNote(score, job.event),
       full: score.full,
       matched: score.matched,
     };
