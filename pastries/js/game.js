@@ -84,6 +84,7 @@ function freshUi() {
     musicLive: false,
     phase: "here",
     freshSip: "",
+    homeHelp: new URLSearchParams(location.search).has("home"),
   };
 }
 
@@ -203,33 +204,25 @@ function logoMarkup(logo, size) {
   return treatSvg(logo?.id || "cupcake", topping, size);
 }
 
+function logoFile(id, size) {
+  return new URL(`../icons/logos/${id}-${size}.png`, import.meta.url).href;
+}
+
 function applyTabIcon(logo) {
-  const markup = logoMarkup(logo, 180);
-  const blob = new Blob([markup], { type: "image/svg+xml" });
-  const url = URL.createObjectURL(blob);
-  const image = new Image();
-  image.onload = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 180;
-    canvas.height = 180;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = "#fff6ee";
-    ctx.fillRect(0, 0, 180, 180);
-    ctx.drawImage(image, 18, 18, 144, 144);
-    URL.revokeObjectURL(url);
-    const png = canvas.toDataURL("image/png");
-    let icon = document.querySelector('link[rel="icon"]');
-    if (!icon) {
-      icon = document.createElement("link");
-      icon.rel = "icon";
-      document.head.appendChild(icon);
+  const id = LOGOS.some((item) => item.id === logo?.id) ? logo.id : "cupcake";
+  const setLink = (rel, href) => {
+    let link = document.querySelector(`link[rel="${rel}"]`);
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = rel;
+      document.head.appendChild(link);
     }
-    icon.type = "image/png";
-    icon.href = png;
+    link.type = "image/png";
+    link.href = href;
+    if (rel === "apple-touch-icon") link.sizes = "180x180";
   };
-  image.onerror = () => URL.revokeObjectURL(url);
-  image.src = url;
+  setLink("apple-touch-icon", logoFile(id, 180));
+  setLink("icon", logoFile(id, 192));
 }
 
 function nameOf() {
@@ -663,6 +656,19 @@ function handle(act, id) {
       return;
     }
     if (!enterPlay(true)) openSub("help");
+    return;
+  }
+  if (act === "home-screen") {
+    const id = LOGOS.some((item) => item.id === state.logo?.id) ? state.logo.id : "cupcake";
+    location.assign(new URL(`../logo/${id}/?home=1`, import.meta.url).href);
+    return;
+  }
+  if (act === "home-help-done") {
+    ui.homeHelp = false;
+    const clean = new URL(location.href);
+    clean.searchParams.delete("home");
+    history.replaceState(null, "", clean.pathname + clean.search + clean.hash);
+    render();
     return;
   }
   if (act === "pick-logo") {
@@ -1183,6 +1189,8 @@ function renderSettings() {
         <span class="name">${esc(item.name)}</span>
       </button>`;
     }).join("")}</div>
+    ${textBtn("home-screen", "Put this on my Home Screen", "btn-go")}
+    <p class="fine">Opens a page for this picture. Delete the old icon, then tap Share, then Add to Home Screen.</p>
   </section>`;
 }
 
@@ -1243,7 +1251,15 @@ function render() {
     : ui.screen === "results" ? renderResults()
     : renderHome();
   const toastHtml = ui.toast ? `<div class="toast" role="status">${ui.toastHtml ? ui.toast : esc(ui.toast)}</div>` : "";
-  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml;
+  const homeHelp = ui.homeHelp ? `<div class="overlay home-help"><div class="sheet">
+      <h2>Put this on your Home Screen</h2>
+      ${logoMarkup(state.logo, 88)}
+      <p>1. Delete the old icon.</p>
+      <p>2. Tap Share. It looks like a square with an arrow.</p>
+      <p>3. Tap Add to Home Screen.</p>
+      ${textBtn("home-help-done", "OK", "btn-go")}
+    </div></div>` : "";
+  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml + homeHelp;
   const next = document.querySelector(".screen");
   if (next && next.dataset.screen === prevName) next.scrollTop = top;
   document.querySelectorAll("[data-scroller]").forEach((el) => {

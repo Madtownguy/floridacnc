@@ -452,6 +452,10 @@ h2, h3 { margin: 0; }
   z-index: 4;
   padding: 12px;
 }
+.home-help { z-index: 12; }
+.home-help .sheet { text-align: center; }
+.home-help .sheet p { font-weight: 800; margin: 8px 0; }
+.home-help svg { width: 88px; height: 88px; }
 .sheet { width: min(520px, 100%); padding: 14px; }
 .sheet .btn { width: 100%; }
 .sheet.inset { margin-top: 8px; }
