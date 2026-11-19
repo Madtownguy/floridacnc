@@ -27,6 +27,13 @@ export function cleanBakerName(value) {
   return text || BAKER;
 }
 
+/** Round box sticker. A name that already ends in s uses the shorter apostrophe. */
+export function bakeryStickerText(value) {
+  const name = cleanBakerName(value);
+  const possessive = /s$/i.test(name) ? `${name}'` : `${name}'s`;
+  return `${possessive} Bakery`;
+}
+
 export const STORAGE_KEY = "pastries-and-more-v1";
 
 /**
@@ -59,6 +66,7 @@ export const INGREDIENTS = [
   { id: "fruit", name: "Fruit", emoji: "🍓" },
   { id: "chocolate", name: "Chocolate", emoji: "🍫" },
   { id: "sprinkles", name: "Sprinkles", emoji: "✨" },
+  { id: "matcha", name: "Matcha", emoji: "🍵" },
 ];
 
 /**
@@ -68,7 +76,7 @@ export const INGREDIENTS = [
  * and add the matching recipe in TREAT_RECIPES.
  */
 export const TREAT_UNLOCK_ORDER = [
-  ["cupcake", "cookie"],
+  ["cupcake", "cookie", "pancakes"],
   ["donut"],
   ["pie"],
   ["cake"],
@@ -118,6 +126,14 @@ const TREAT_RECIPES = {
     needs: { eggs: 1, milk: 1, sugar: 1 },
     toppings: ["plain", "caramel", "cream", "honey"],
   },
+  pancakes: {
+    name: "Fluffy Pancakes",
+    single: "stack of fluffy pancakes",
+    plural: "stacks of fluffy pancakes",
+    price: 9,
+    needs: { flour: 1, eggs: 1, milk: 1 },
+    toppings: ["syrup", "butter", "berries", "marshmallow"],
+  },
 };
 
 function treatUnlockLevel(id) {
@@ -137,6 +153,9 @@ export const TOPPINGS = [
   { id: "strawberry", name: "Strawberry", phrase: "strawberry", unlockLevel: 1, needs: { fruit: 1 }, priceAdd: 2 },
   { id: "chocolate", name: "Chocolate", phrase: "chocolate", unlockLevel: 1, needs: { chocolate: 1 }, priceAdd: 2 },
   { id: "sprinkles", name: "Sprinkles", phrase: "sprinkles", unlockLevel: 1, needs: { sprinkles: 1 }, priceAdd: 2 },
+  { id: "syrup", name: "Syrup", phrase: "syrup", unlockLevel: 1, needs: { sugar: 1 }, priceAdd: 2 },
+  { id: "butter", name: "Butter", phrase: "butter", unlockLevel: 1, needs: { butter: 1 }, priceAdd: 2 },
+  { id: "berries", name: "Berries", phrase: "berries", unlockLevel: 1, needs: { fruit: 1 }, priceAdd: 2 },
   { id: "marshmallow", name: "Marshmallow", phrase: "marshmallow", unlockLevel: 1, needs: { sugar: 1 }, priceAdd: 2 },
   { id: "caramel", name: "Caramel", phrase: "caramel", unlockLevel: 2, needs: { sugar: 1 }, priceAdd: 2 },
   { id: "blueberry", name: "Blueberry", phrase: "blueberry", unlockLevel: 3, needs: { fruit: 1 }, priceAdd: 2 },
@@ -159,6 +178,7 @@ export const DRINKS = [
   { id: "hot-chocolate", name: "Hot Chocolate", with: "a hot chocolate", unlockLevel: 1, price: 5, needs: { milk: 1, chocolate: 1 } },
   { id: "milk", name: "Milk", with: "milk", unlockLevel: 1, price: 3, needs: { milk: 1 } },
   { id: "chocolate-milk", name: "Chocolate Milk", with: "a chocolate milk", unlockLevel: 1, price: 4, needs: { milk: 1, chocolate: 1 } },
+  { id: "matcha", name: "Matcha", with: "a matcha", unlockLevel: 1, price: 5, needs: { matcha: 1 } },
 ];
 
 /** Pictures she can use as the home-screen logo. kind is "treat" or "drink". */
@@ -169,17 +189,27 @@ export const LOGOS = [
   { kind: "treat", id: "pie", name: "Pie" },
   { kind: "treat", id: "cake", name: "Cake" },
   { kind: "treat", id: "flan", name: "Flan" },
+  { kind: "treat", id: "pancakes", name: "Fluffy Pancakes" },
   { kind: "drink", id: "coffee", name: "Coffee" },
   { kind: "drink", id: "hot-chocolate", name: "Hot Chocolate" },
   { kind: "drink", id: "milk", name: "Milk" },
   { kind: "drink", id: "chocolate-milk", name: "Chocolate Milk" },
+  { kind: "drink", id: "matcha", name: "Matcha" },
 ];
 
-/** Box decorations. Leave these null until ribbons or stickers are added.
- *  A saved mail job can also set ribbon or sticker to a short id.
- *  The box draws a bow or a sticker only when one of those is set.
+/** Box decorations. ribbon stays empty until she picks a color.
+ *  sticker "bakery" draws the round name sticker.
+ *  A saved mail job can set ribbon to one of RIBBONS.
  */
-export const BOX_DECOR = { ribbon: null, sticker: null };
+export const BOX_DECOR = { ribbon: null, sticker: "bakery" };
+
+export const RIBBONS = [
+  { id: "pink", name: "Pink", color: "#ff8fb8" },
+  { id: "red", name: "Red", color: "#e5484d" },
+  { id: "blue", name: "Blue", color: "#4c9aff" },
+  { id: "purple", name: "Purple", color: "#a78bfa" },
+  { id: "gold", name: "Gold", color: "#e8b931" },
+];
 
 /** About one customer in three also asks for a drink, after the first lesson. */
 export const DRINK_ORDER_CHANCE = 0.3;
@@ -212,6 +242,13 @@ export const DRINK_STEPS = {
     { id: "milk", name: "Milk", hint: "Pour the milk!" },
     { id: "chocolate", name: "Chocolate", hint: "Add the chocolate!" },
     { id: "stir", name: "Stir", hint: "Stir it!" },
+  ],
+  matcha: [
+    { id: "matcha-cup", name: "Cup", hint: "Tap the cup!" },
+    { id: "matcha-powder", name: "Matcha powder", hint: "Add the matcha powder!" },
+    { id: "hot-water", name: "Hot water", hint: "Pour the hot water!" },
+    { id: "whisk", name: "Whisk", hint: "Whisk it!" },
+    { id: "matcha-milk", name: "Milk", hint: "Add milk if you like!", optional: "milk" },
   ],
 };
 
@@ -263,6 +300,7 @@ export const SHOP = [
   { id: "pack-fruit", kind: "ingredient", name: "Fruit basket", cost: 6, emoji: "🍓", desc: "Adds 4 fruit", gives: { fruit: 4 } },
   { id: "pack-chocolate", kind: "ingredient", name: "Chocolate bar", cost: 6, emoji: "🍫", desc: "Adds 4 chocolate", gives: { chocolate: 4 } },
   { id: "pack-sprinkles", kind: "ingredient", name: "Sprinkle jar", cost: 6, emoji: "✨", desc: "Adds 4 sprinkles", gives: { sprinkles: 4 } },
+  { id: "pack-matcha", kind: "ingredient", name: "Matcha tin", cost: 6, emoji: "🍵", desc: "Adds 4 matcha", gives: { matcha: 4 } },
   { id: "cozyOven", kind: "upgrade", name: "Cozy oven", cost: 28, emoji: "🔥", desc: "Customers wait longer" },
   { id: "tipJar", kind: "upgrade", name: "Tip jar", cost: 36, emoji: "🫙", desc: "A little extra on every happy serve" },
   { id: "secondChance", kind: "upgrade", name: "Second-chance bell", cost: 32, emoji: "🔔", desc: "The first mix-up each visit does not rush them" },

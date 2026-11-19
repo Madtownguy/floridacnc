@@ -1,5 +1,6 @@
 /** Drawings for treats, customers, and the bakery. Original art, no outside images. */
 import { bakeryFeatures, cleanBakerName, currentAwning, hasDecor, unlockedTreats } from "./rules.js";
+import { RIBBONS } from "./data.js";
 
 const INK = "#5c3a32";
 
@@ -24,6 +25,9 @@ function frosting(topping, fallback) {
     case "coconut": return "#fffdf6";
     case "sprinkles": return "#ffe9f3";
     case "marshmallow": return "#fffaf6";
+    case "syrup": return "#e09a2b";
+    case "butter": return "#ffe08a";
+    case "berries": return "#ff8b7a";
     default: return fallback;
   }
 }
@@ -56,6 +60,15 @@ function extras(topping, y) {
   }
   if (topping === "marshmallow") {
     return puff(34, y, 5) + puff(46, y + 2, 4.5);
+  }
+  if (topping === "syrup") {
+    return `<path d="M34 ${y - 6} Q40 ${y + 8} 36 ${y + 12}" fill="none" stroke="#c56a12" stroke-width="3" stroke-linecap="round"/>`;
+  }
+  if (topping === "butter") {
+    return `<rect x="34" y="${y - 8}" width="12" height="8" rx="2" fill="#ffe08a" stroke="${INK}" stroke-width="2"/>`;
+  }
+  if (topping === "berries") {
+    return `<circle cx="32" cy="${y}" r="3.4" fill="#e23b4a"/><circle cx="42" cy="${y - 2}" r="3" fill="#7d74d6"/><circle cx="48" cy="${y + 2}" r="2.6" fill="#e23b4a"/>`;
   }
   return "";
 }
@@ -110,6 +123,20 @@ export function treatInner(treatId, toppingId = "plain") {
       ${extras(top, 44)}
     `;
   }
+  if (treatId === "pancakes") {
+    return `
+      <ellipse cx="40" cy="64" rx="26" ry="7" fill="#e7a85a" stroke="${INK}" stroke-width="3"/>
+      <ellipse cx="40" cy="56" rx="24" ry="7" fill="#f2c078" stroke="${INK}" stroke-width="3"/>
+      <ellipse cx="40" cy="48" rx="22" ry="7" fill="#ffd79a" stroke="${INK}" stroke-width="3"/>
+      <ellipse cx="40" cy="40" rx="20" ry="6.5" fill="#ffe7b8" stroke="${INK}" stroke-width="3"/>
+      <ellipse cx="34" cy="38" rx="2" ry="1" fill="#e7b36a"/>
+      <ellipse cx="46" cy="39" rx="2" ry="1" fill="#e7b36a"/>
+      ${top === "butter" || top === "plain" ? `<rect x="34" y="28" width="12" height="8" rx="2" fill="#ffe08a" stroke="${INK}" stroke-width="2"/>` : ""}
+      ${top === "syrup" ? `<path d="M40 24 Q48 36 36 48" fill="none" stroke="#c56a12" stroke-width="3" stroke-linecap="round"/>` : ""}
+      ${top === "berries" ? `<circle cx="30" cy="34" r="4" fill="#e23b4a"/><circle cx="42" cy="32" r="3.4" fill="#7d74d6"/><circle cx="48" cy="38" r="3" fill="#e23b4a"/>` : ""}
+      ${top === "marshmallow" ? `${puff(30, 32, 5)}${puff(46, 34, 4.5)}` : ""}
+    `;
+  }
   if (treatId === "flan") {
     return `
       <ellipse cx="40" cy="62" rx="26" ry="8" fill="#fff" stroke="${INK}" stroke-width="3"/>
@@ -146,6 +173,17 @@ export function drinkInner(drinkId, floatId = null) {
   const puffs = floatId === "marshmallow"
     ? `${puff(30, 36, 5)}${puff(42, 34, 5)}${puff(36, 44, 4)}`
     : "";
+  if (drinkId === "matcha") {
+    const milky = floatId === "milk";
+    return `
+      <path d="M22 36 H50 Q60 36 60 46 V58 Q60 72 48 72 H28 Q16 72 16 58 V46 Q16 36 22 36 Z" fill="#fff" stroke="${INK}" stroke-width="3"/>
+      <path d="M22 46 H52 V58 Q52 66 44 66 H26 Q20 66 20 58 V46 Z" fill="${milky ? "#d7f0c2" : "#7dbe55"}"/>
+      <ellipse cx="36" cy="46" rx="14" ry="4" fill="${milky ? "#e7f6d8" : "#5e9a3c"}" stroke="${INK}" stroke-width="2"/>
+      <path d="M52 46 H60 Q68 46 68 54 Q68 62 60 62 H52" fill="none" stroke="${INK}" stroke-width="3"/>
+      ${milky ? `<ellipse cx="30" cy="50" rx="4" ry="2" fill="#fff" opacity="0.8"/>` : ""}
+      ${steam()}
+    `;
+  }
   if (drinkId === "hot-chocolate") {
     return `
       <path d="M20 32 H52 Q62 32 62 42 V56 Q62 70 50 70 H28 Q16 70 16 56 V42 Q16 32 20 32 Z" fill="#f3c7b0" stroke="${INK}" stroke-width="3"/>
@@ -221,6 +259,31 @@ export function sipSvg(stepId, size = 64) {
   }
   if (stepId === "marshmallow") {
     inner = `${puff(24, 40, 8)}${puff(40, 32, 9)}${puff(52, 44, 7)}`;
+  }
+  if (stepId === "matcha-cup") {
+    inner = `<path d="M18 30 H46 Q54 30 54 38 V52 Q54 66 42 66 H26 Q14 66 14 52 V38 Q14 30 18 30 Z" fill="#fff" stroke="${INK}" stroke-width="3"/>
+      <path d="M46 38 H54 Q62 38 62 46 Q62 54 54 54 H46" fill="none" stroke="${INK}" stroke-width="3"/>
+      <path d="M20 44 H48 V54 Q48 60 40 60 Q32 60 32 54 V44 Z" fill="#7dbe55"/>`;
+  }
+  if (stepId === "matcha-powder") {
+    inner = `<rect x="24" y="22" width="32" height="36" rx="6" fill="#8d6a4a" stroke="${INK}" stroke-width="3"/>
+      <rect x="24" y="22" width="32" height="12" rx="6" fill="#6f5136"/>
+      <ellipse cx="40" cy="44" rx="10" ry="6" fill="#7dbe55" stroke="${INK}" stroke-width="2"/>`;
+  }
+  if (stepId === "hot-water") {
+    inner = `<path d="M22 30 H42 L46 62 H18 Z" fill="#e7f4ff" stroke="${INK}" stroke-width="3"/>
+      <path d="M30 16 Q33 10 30 6 M38 14 Q41 8 38 4" fill="none" stroke="#9fd4ff" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M42 36 Q54 44 42 54" fill="none" stroke="#7eb6ff" stroke-width="4" stroke-linecap="round"/>`;
+  }
+  if (stepId === "whisk") {
+    inner = `<path d="M40 14 V40" stroke="#c68642" stroke-width="4" stroke-linecap="round"/>
+      <path d="M28 42 Q40 36 52 42 L48 64 Q40 70 32 64 Z" fill="#e7b36a" stroke="${INK}" stroke-width="3"/>
+      <path d="M34 48 V62 M40 46 V64 M46 48 V62" stroke="#a56b12" stroke-width="1.6" stroke-linecap="round"/>`;
+  }
+  if (stepId === "matcha-milk") {
+    inner = `<path d="M22 28 H42 L46 60 H18 Z" fill="#fff" stroke="${INK}" stroke-width="3"/>
+      <path d="M42 34 Q56 42 42 52" fill="none" stroke="#d7ecff" stroke-width="4" stroke-linecap="round"/>
+      <ellipse cx="32" cy="48" rx="6" ry="3" fill="#d7f0c2"/>`;
   }
   return wrap(inner, size, "0 0 80 80");
 }
@@ -310,8 +373,9 @@ export function customerSvg(customer, mood = "neutral") {
 
 function miniTreats(level, y, scale) {
   const treats = unlockedTreats(level);
+  const gap = treats.length > 6 ? 26 : 34;
   return treats.map((treat, index) => {
-    const x = 188 + index * 34;
+    const x = 188 + index * gap;
     return `<g transform="translate(${x} ${y}) scale(${scale})">${treatInner(treat.id, treat.id === "flan" ? "caramel" : "plain")}</g>`;
   }).join("");
 }
@@ -460,13 +524,31 @@ export function boxSvg(size = 22) {
   </svg>`;
 }
 
-export function mailBoxSvg({ packed = 0, closed = false, ribbon = null, sticker = null } = {}, size = 150) {
+function xml(value) {
+  return String(value).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+}
+
+export function mailBoxSvg({ packed = 0, closed = false, ribbon = null, sticker = null, label = "" } = {}, size = 150) {
   const treats = Array.from({ length: Math.min(packed, 3) }, (_, i) => {
     const x = 48 + i * 22;
     return `<circle cx="${x}" cy="78" r="8" fill="${["#ff8fb8", "#ffe08a", "#9fd4ff"][i]}" stroke="#5c3a32" stroke-width="2"/>`;
   }).join("");
-  const bow = ribbon ? `<path d="M70 46 C56 34 48 48 70 58 C92 48 84 34 70 46 Z" fill="#ff8fb8" stroke="#5c3a32" stroke-width="2"/>` : "";
-  const seal = sticker ? `<circle cx="104" cy="88" r="10" fill="#c9b6ff" stroke="#5c3a32" stroke-width="2"/>` : "";
+  const color = RIBBONS.find((item) => item.id === ribbon)?.color || null;
+  const bow = color ? `
+    <path d="M70 34 V92" stroke="${color}" stroke-width="10" stroke-linecap="round"/>
+    <path d="M70 50 C52 36 46 54 70 60 C94 54 88 36 70 50 Z" fill="${color}" stroke="#5c3a32" stroke-width="2"/>
+    <path d="M62 58 L54 74 M78 58 L86 74" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round"/>
+  ` : "";
+  const lines = String(label || "").split(" ");
+  const title = lines.slice(0, -1).join(" ") || lines[0] || "";
+  const word = lines.length > 1 ? lines[lines.length - 1] : "";
+  const font = Math.max(5.5, Math.min(8, 118 / Math.max(6, title.length)));
+  const seal = label ? `
+    <circle cx="78" cy="108" r="24" fill="#fffdf8" stroke="#5c3a32" stroke-width="2.5"/>
+    <circle cx="78" cy="108" r="20" fill="none" stroke="#ff8fb8" stroke-width="1.6"/>
+    <text x="78" y="${word ? 106 : 112}" text-anchor="middle" font-size="${font}" font-weight="700" fill="#5c3a32" font-family="ui-rounded, sans-serif">${xml(title)}</text>
+    ${word ? `<text x="78" y="116" text-anchor="middle" font-size="8" font-weight="700" fill="#5c3a32" font-family="ui-rounded, sans-serif">${xml(word)}</text>` : ""}
+  ` : (sticker ? `<circle cx="104" cy="88" r="10" fill="#c9b6ff" stroke="#5c3a32" stroke-width="2"/>` : "");
   const lid = closed
     ? `<path d="M28 70 L70 48 L112 70 L70 92 Z" fill="#ffd6e7" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round"/>`
     : `<path d="M22 58 L70 34 L118 58 L70 78 Z" fill="#ffe9a3" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round"/>`;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DRINK_ORDER_CHANCE, DRINKS, MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, cleanBakerName } from "./data.js";
+import { DRINK_ORDER_CHANCE, DRINKS, MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, bakeryStickerText, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
   applySip,
@@ -28,6 +28,7 @@ import {
   packMailItem,
   closeMailBox,
   shipMail,
+  chooseMailRibbon,
   mailPay,
   mailItemReady,
 } from "./rules.js";
@@ -180,13 +181,13 @@ test("finishing a season always unlocks something visible", () => {
 
 test("treats follow TREAT_UNLOCK_ORDER and later levels stay extra", () => {
   assert.deepEqual(TREAT_UNLOCK_ORDER, [
-    ["cupcake", "cookie"],
+    ["cupcake", "cookie", "pancakes"],
     ["donut"],
     ["pie"],
     ["cake"],
     ["flan"],
   ]);
-  assert.deepEqual(unlockedTreats(1).map((treat) => treat.id), ["cupcake", "cookie"]);
+  assert.deepEqual(unlockedTreats(1).map((treat) => treat.id), ["cupcake", "cookie", "pancakes"]);
   assert.equal(getTreat("donut").unlockLevel, 2);
   assert.equal(getTreat("pie").unlockLevel, 3);
   assert.equal(getTreat("cake").unlockLevel, 4);
@@ -319,7 +320,7 @@ test("a shorter config still completes when saved time already passed it", () =>
 
 test("drinks are optional, priced, and old saves keep their coins", () => {
   assert.equal(DRINK_ORDER_CHANCE, 0.3);
-  assert.deepEqual(DRINKS.map((drink) => drink.unlockLevel), [1, 1, 1, 1]);
+  assert.deepEqual(DRINKS.map((drink) => drink.unlockLevel), [1, 1, 1, 1, 1]);
   assert.equal(tutorialOrder().drink, "milk");
   const said = describeOrder({ treat: "cupcake", topping: "plain", qty: 1, customer: "sunny", drink: "milk" });
   assert.equal(said.line, "One vanilla cupcake and milk, please!");
@@ -492,7 +493,7 @@ test("mail orders are calm, pay like a serve, and migrate without wiping the bak
   assert.equal(sample.items.length, 1);
   assert.deepEqual(sample.items[0], { treat: "cupcake", topping: "plain", drink: null, float: null });
   assert.equal(sample.ribbon, null);
-  assert.equal(sample.sticker, null);
+  assert.equal(sample.sticker, "bakery");
   assert.equal(sample.packed, 0);
   assert.equal(sample.closed, false);
 
@@ -513,7 +514,7 @@ test("mail orders are calm, pay like a serve, and migrate without wiping the bak
     mail: normalizeMail([{
       id: "keep-me",
       customer: "mayor",
-      ribbon: "pink-bow",
+      ribbon: "gold",
       sticker: "star",
       packed: 0,
       items: [
@@ -526,7 +527,7 @@ test("mail orders are calm, pay like a serve, and migrate without wiping the bak
   assert.equal(state.mail.length, 3);
   assert.equal(state.mail[0].id, "keep-me");
   assert.equal(state.mail[0].customer, "sunny");
-  assert.equal(state.mail[0].ribbon, "pink-bow");
+  assert.equal(state.mail[0].ribbon, "gold");
   assert.equal(state.mail[0].sticker, "star");
   assert.equal(state.mail[0].items.length, 1);
   assert.equal(state.mail[0].items[0].treat, "cupcake");
@@ -566,6 +567,9 @@ test("mail orders are calm, pay like a serve, and migrate without wiping the bak
   assert.equal(packed.state.season.playedMs, 5000);
   state = closeMailBox(packed.state, 0);
   assert.equal(state.mail[0].closed, true);
+  const bare = { ...state, mail: state.mail.map((job, index) => index === 0 ? { ...job, ribbon: null } : job) };
+  assert.equal(shipMail(bare, 0, zero).ok, false);
+  state = chooseMailRibbon(state, 0, "pink");
   const shipped = shipMail(state, 0, zero);
   assert.equal(shipped.ok, true);
   assert.equal(shipped.pay, 13);
@@ -609,10 +613,66 @@ test("mail orders are calm, pay like a serve, and migrate without wiping the bak
   for (const job of loaded.mail) {
     assert.ok(job.items.length >= 1 && job.items.length <= 3);
     assert.equal(job.ribbon, null);
-    assert.equal(job.sticker, null);
+    assert.equal(job.sticker, "bakery");
     for (const bit of job.items) {
       assert.ok(bit.treat || bit.drink);
       if (bit.treat) assert.ok(allowed.has(bit.treat));
     }
   }
+});
+
+test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () => {
+  assert.equal(bakeryStickerText("Madison"), "Madison's Bakery");
+  assert.equal(bakeryStickerText("Chris"), "Chris' Bakery");
+  assert.equal(bakeryStickerText("JAMES"), "JAMES' Bakery");
+  assert.equal(getTreat("pancakes").unlockLevel, 1);
+  assert.deepEqual(getTreat("pancakes").toppings, ["syrup", "butter", "berries", "marshmallow"]);
+  assert.equal(getTreat("pancakes").price, 9);
+  assert.deepEqual(drinkSteps("matcha").map((step) => step.id), ["matcha-cup", "matcha-powder", "hot-water", "whisk", "matcha-milk"]);
+  assert.deepEqual(drinkSteps("matcha", "milk").map((step) => step.id), ["matcha-cup", "matcha-powder", "hot-water", "whisk", "matcha-milk"]);
+
+  let state = startSeason({ ...newGame(), tutorialDone: true }, () => 0);
+  state = {
+    ...state,
+    season: {
+      ...state.season,
+      order: { treat: "pancakes", topping: "syrup", qty: 1, customer: "sunny", vip: false, drink: "matcha", float: null },
+      plate: { treat: "pancakes", topping: "syrup", drink: null, float: null, sips: [] },
+    },
+  };
+  for (const id of ["matcha-cup", "matcha-powder", "hot-water", "whisk"]) state = applySip(state, id).state;
+  assert.equal(state.season.plate.drink, "matcha");
+  assert.equal(state.season.plate.float, null);
+  const plain = tryServe(state, { fast: false });
+  assert.equal(plain.result, "match");
+  assert.equal(plain.pay, 9 + 2 + 5);
+
+  state = {
+    ...plain.state,
+    season: {
+      ...plain.state.season,
+      resolved: null,
+      order: { treat: "pancakes", topping: "berries", qty: 1, customer: "sunny", vip: false, drink: "matcha", float: "milk" },
+      plate: { treat: "pancakes", topping: "berries", drink: "matcha", float: null, sips: ["matcha-cup", "matcha-powder", "hot-water", "whisk"] },
+    },
+  };
+  assert.equal(tryServe(state, { fast: false }).result, "need-float");
+  state = applySip(state, "matcha-milk").state;
+  const milky = tryServe(state, { fast: false });
+  assert.equal(milky.result, "match");
+  assert.equal(milky.pay, 9 + 2 + 5 + 2);
+  assert.equal(milky.state.pantry.milk, state.pantry.milk - 2);
+  assert.equal(milky.state.pantry.matcha, state.pantry.matcha - 1);
+
+  const old = { v: 1, coins: 80, level: 3, pantry: { flour: 2 }, bakerName: "Chris" };
+  const store = memory();
+  store.setItem(STORAGE_KEY, JSON.stringify(old));
+  const loaded = load(store);
+  assert.equal(loaded.coins, 80);
+  assert.equal(loaded.level, 3);
+  assert.equal(loaded.pantry.flour, 2);
+  assert.equal(loaded.pantry.matcha, 4);
+  assert.equal(loaded.bakerName, "Chris");
+  assert.equal(loaded.mail.length, 3);
+  assert.ok(loaded.mail.every((job) => job.sticker === "bakery"));
 });
