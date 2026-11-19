@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DRINK_ORDER_CHANCE, DRINKS, GAME_VERSION, MUSIC_TRACKS, PARTY_EVENTS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, UPDATES, bakeryStickerText, cleanBakerName } from "./data.js";
+import { CUSTOM_ORDER_CHANCE, DRINK_ORDER_CHANCE, DRINKS, GAME_VERSION, MUSIC_TRACKS, PARTY_EVENTS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, UPDATES, bakeryStickerText, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
   applySip,
@@ -506,6 +506,7 @@ test("mail orders are calm, pay like a serve, and migrate without wiping the bak
   const open = new Set(unlockedTreats(1).map((treat) => treat.id));
   for (const job of normalizeMail(null, fresh, zero)) {
     assert.ok(job.items.length >= 1 && job.items.length <= 3);
+    if (job.kind === "custom") continue;
     for (const item of job.items) {
       assert.ok(item.treat || item.drink);
       if (item.treat) assert.ok(open.has(item.treat));
@@ -689,13 +690,13 @@ test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () 
 });
 
 test("what's new shows once per version and keeps the bakery", () => {
-  assert.equal(GAME_VERSION, "3");
+  assert.equal(GAME_VERSION, "4");
   assert.equal(UPDATES[0].version, GAME_VERSION);
   assert.deepEqual(UPDATES[0].lines, [
-    "💒 Wedding cakes and 🛌 Sleepover cakes in Custom Orders!",
+    "🎉 Custom Orders come way more often now!",
   ]);
-  assert.equal(UPDATES[1].version, "2");
-  assert.equal(UPDATES[2].version, "1");
+  assert.equal(UPDATES[1].version, "3");
+  assert.equal(UPDATES[2].version, "2");
   assert.equal(newGame().seenVersion, "");
   const store = memory();
   store.setItem(STORAGE_KEY, JSON.stringify({
@@ -885,4 +886,57 @@ test("wedding cakes are fancier and sleepover cakes stay cozy", () => {
   assert.match(customNote({ matched: 6, full: true }, "wedding"), /wedding|fancy|beautiful/i);
   assert.match(customNote({ matched: 0, full: false }, "sleepover"), /sleepover|glad/i);
   assert.match(customNote({ matched: 4, full: true }, "birthday"), /hoped/);
+});
+
+test("more than half of new orders are custom cakes, and one stays available", () => {
+  assert.ok(CUSTOM_ORDER_CHANCE >= 0.5);
+  let custom = 0;
+  const rolls = 300;
+  for (let i = 0; i < rolls; i += 1) {
+    const job = rollMailJob(newGame(), () => (i + 0.5) / rolls);
+    if (job.kind === "custom") custom += 1;
+  }
+  assert.ok(custom / rolls >= 0.5);
+  assert.ok(custom / rolls < 0.9);
+
+  const fresh = newGame();
+  const open = normalizeMail(null, fresh, () => 0);
+  assert.equal(open.length, 3);
+  assert.equal(open.filter((job) => job.kind === "custom").length, 1);
+
+  const started = {
+    id: "keep-progress",
+    customer: "sunny",
+    items: [{ treat: "cupcake", topping: "strawberry", drink: null, float: null }],
+    packed: 1,
+    closed: false,
+    ribbon: null,
+    sticker: "bakery",
+    plate: { treat: "cupcake", topping: "strawberry", drink: null, float: null, sips: [] },
+  };
+  const saved = normalizeMail([started, started, started], fresh, () => 0);
+  assert.equal(saved.filter((job) => job.id === "keep-progress").length, 3);
+  assert.equal(saved.filter((job) => job.kind === "custom").length, 0);
+
+  const party = {
+    kind: "custom",
+    id: "only-party",
+    customer: "sunny",
+    event: "birthday",
+    wish: { frosting: "strawberry", topping: "sprinkles", ribbon: "gold", sticker: true },
+    made: { frosting: "strawberry", topping: "sprinkles", ribbon: "gold", sticker: true },
+    items: [{ treat: "cake", topping: "strawberry", drink: null, float: null }],
+    packed: 1,
+    closed: true,
+    ribbon: "gold",
+    sticker: "bakery",
+    plate: { treat: null, topping: null, drink: null, float: null, sips: [] },
+  };
+  const plain = rollMailJob(fresh, () => 0);
+  const shipped = shipMail({ ...fresh, coins: 20, mail: [party, plain, plain] }, 0, () => 0);
+  assert.equal(shipped.ok, true);
+  assert.equal(shipped.state.mail[0].kind, "custom");
+  assert.notEqual(shipped.state.mail[0].id, "only-party");
+  assert.equal(shipped.state.mail[1].id, plain.id);
+  assert.equal(shipped.state.coins, 20 + shipped.pay);
 });
