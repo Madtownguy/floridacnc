@@ -1,0 +1,27 @@
+{
+  "id": "/pastries/logo/matcha/",
+  "name": "Pastries and more!",
+  "short_name": "Pastries",
+  "description": "Bake treats, serve customers, and grow Madison's bakery.",
+  "start_url": "/pastries/logo/matcha/",
+  "scope": "/pastries/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fff6ee",
+  "theme_color": "#ff8fb8",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/pastries/icons/logos/matcha-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pastries/icons/logos/matcha-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

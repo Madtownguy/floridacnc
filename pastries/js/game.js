@@ -3,10 +3,11 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { BOX_DECOR, INGREDIENTS, LOGOS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
+import { BOX_DECOR, INGREDIENTS, LOGOS, MUSIC_TRACKS, MUSIC_VOLUMES, RIBBONS, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, bakeryStickerText, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
 import {
   badgeName,
   buy,
+  chooseMailRibbon,
   closeMailBox,
   closeSeason,
   describeMailItem,
@@ -27,6 +28,7 @@ import {
   orderNeeds,
   packMailItem,
   patienceMaxMs,
+  requiredDrinkSteps,
   rollOrder,
   seasonClock,
   seasonTimeUp,
@@ -208,10 +210,16 @@ function onSeasonTimeUp() {
   render();
 }
 
+function sampleTopping(id) {
+  if (id === "flan") return "caramel";
+  if (id === "cake") return "strawberry";
+  if (id === "pancakes") return "syrup";
+  return "plain";
+}
+
 function logoMarkup(logo, size) {
   if (logo?.kind === "drink") return drinkSvg(logo.id, size);
-  const topping = logo?.id === "flan" ? "caramel" : logo?.id === "cake" ? "strawberry" : "plain";
-  return treatSvg(logo?.id || "cupcake", topping, size);
+  return treatSvg(logo?.id || "cupcake", sampleTopping(logo?.id), size);
 }
 
 function logoFile(id, size) {
@@ -345,7 +353,7 @@ function onServe() {
     return;
   }
   if (out.result === "need-float") {
-    toast("Add marshmallows!");
+    toast(state.season.order?.float === "milk" ? "Add milk!" : "Add marshmallows!");
     return;
   }
   if (out.result === "short") {
@@ -596,17 +604,22 @@ function mailHint() {
   if (ui.shipBurst) return null;
   const job = mailJob();
   if (!job) return { target: "back", text: "Tap Back." };
+  if (job.closed && !RIBBONS.some((ribbon) => ribbon.id === job.ribbon)) return { target: "ribbon", text: "Tap a ribbon." };
   if (job.closed) return { target: "ship", text: "Tap Ship!" };
   if (job.packed >= job.items.length) return { target: "close", text: "Tap Close the box." };
   const item = job.items[job.packed];
   const plate = job.plate || {};
-  if (missingIngredients(state.pantry, totalNeeds(item.treat, item.topping, 1, item.drink, item.float)).length && mailItemReady(plate, item)) {
-    return { target: "shop", text: "Tap Shop to buy." };
+  if (mailItemReady(plate, item)) {
+    const poured = item.float || (item.drink === "matcha" && plate.float === "milk" ? "milk" : null);
+    if (missingIngredients(state.pantry, totalNeeds(item.treat, item.topping, 1, item.drink, poured)).length) {
+      return { target: "shop", text: "Tap Shop to buy." };
+    }
+    return { target: "pack", text: "Tap Put in the box." };
   }
   if (item.treat && plate.treat !== item.treat) return { target: "treat", text: "Tap this treat." };
   if (item.treat && plate.topping !== item.topping) return { target: "topping", text: "Tap this topping." };
-  if (item.drink && (plate.drink !== item.drink || (plate.float || null) !== (item.float || null))) {
-    const steps = drinkSteps(item.drink, item.float);
+  if (item.drink) {
+    const steps = requiredDrinkSteps(item.drink, item.float);
     const next = steps[(plate.sips || []).length];
     return { target: "sip", text: next?.hint || "Tap the next step!" };
   }
@@ -989,6 +1002,12 @@ function handle(act, id) {
     closeCurrentBox();
     return;
   }
+  if (act === "ribbon") {
+    state = chooseMailRibbon(state, ui.mailIndex, id);
+    save(state);
+    render();
+    return;
+  }
   if (act === "ship") {
     shipCurrent();
     return;
@@ -1138,7 +1157,7 @@ function renderOrders() {
   if (ui.shipBurst) {
     return `<section class="screen sub" data-screen="orders" data-shipped="1">
       <div class="ship-burst" role="status"><div class="ship-card">
-        ${mailBoxSvg({ packed: 0, closed: true, ribbon: ui.shipBurst.ribbon || BOX_DECOR.ribbon, sticker: ui.shipBurst.sticker || BOX_DECOR.sticker }, 160)}
+        ${mailBoxSvg({ packed: 0, closed: true, ribbon: ui.shipBurst.ribbon || BOX_DECOR.ribbon, sticker: ui.shipBurst.sticker || BOX_DECOR.sticker, label: bakeryStickerText(state.bakerName) }, 160)}
         <h2>Shipped!</h2>
         <p>${esc(ui.shipBurst.name)} will be so happy.</p>
         <p class="ship-pay">${money(ui.shipBurst.pay, 28)}</p>
@@ -1147,7 +1166,7 @@ function renderOrders() {
     </section>`;
   }
   const jobs = state.mail || [];
-  const note = `<p class="fine">No timer here. Make each item, tuck it in the box, close it, and tap Ship. The Selling Season clock waits.</p>`;
+  const note = `<p class="fine">No timer here. Make each item, tuck it in the box, close it, pick a ribbon, and tap Ship. The Selling Season clock waits.</p>`;
   const meter = state.season ? seasonMeter() : "";
   if (ui.mailIndex == null) {
     const cards = jobs.map((job, index) => {
@@ -1178,6 +1197,7 @@ function renderOrders() {
     closed: job.closed,
     ribbon: job.ribbon || BOX_DECOR.ribbon,
     sticker: job.sticker || BOX_DECOR.sticker,
+    label: bakeryStickerText(state.bakerName),
   };
   const lines = job.items.map((item, index) => {
     const done = index < job.packed;
@@ -1255,7 +1275,17 @@ function renderOrders() {
       </div>`;
   }
   const close = !item && !job.closed ? textBtn("close-box", "Close the box", "btn-go", "", "close") : "";
-  const ship = job.closed ? textBtn("ship", "Ship", "btn-go", "", "ship") : "";
+  const ribbonChosen = RIBBONS.some((ribbon) => ribbon.id === job.ribbon);
+  const ribbons = job.closed ? `<p class="row-label">Pick a ribbon</p><div class="scroller ribbon-row" data-scroller="ribbons">${RIBBONS.map((ribbon, index) => {
+    const on = job.ribbon === ribbon.id;
+    const guide = !ribbonChosen && index === 0;
+    const next = guide && activeHint()?.target === "ribbon" ? " is-next" : "";
+    return `<button type="button" class="choice${on ? " is-on" : ""}${next}" data-act="ribbon" data-id="${ribbon.id}" ${guide ? 'data-hint="ribbon"' : ""} aria-pressed="${on}">
+      <span class="ribbon-swatch" style="background:${ribbon.color}"></span>
+      <span class="name">${esc(ribbon.name)}</span>
+    </button>`;
+  }).join("")}</div>` : "";
+  const ship = job.closed && ribbonChosen ? textBtn("ship", "Ship", "btn-go", "", "ship") : "";
   return `<section class="screen sub" data-screen="orders" data-mail="${ui.mailIndex}">
     <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>${esc(who.name)}</h2><span class="pill">${money(state.coins)}</span></header>
     ${note}
@@ -1264,6 +1294,7 @@ function renderOrders() {
     <ul class="mail-lines">${lines}</ul>
     ${making}
     ${close}
+    ${ribbons}
     ${ship}
   </section>`;
 }
@@ -1284,7 +1315,7 @@ function renderHome() {
   const menu = TREATS.map((treat) => {
     const locked = treat.unlockLevel > state.level;
     return `<button type="button" class="choice ${locked ? "is-locked" : ""}" data-act="preview-treat" data-id="${treat.id}">
-      ${treatSvg(treat.id, treat.id === "flan" ? "caramel" : "plain", 64)}
+      ${treatSvg(treat.id, sampleTopping(treat.id), 64)}
       <span class="name">${esc(treat.name)}</span>
       <em>${locked ? `Level ${treat.unlockLevel}` : "Ready"}</em>
     </button>`;
@@ -1496,7 +1527,7 @@ function renderRecipes() {
     const locked = treat.unlockLevel > state.level;
     const tops = treat.toppings.map((id) => getTopping(id)?.name).filter(Boolean);
     return `<article class="recipe ${locked ? "is-locked" : ""}">
-      ${treatSvg(treat.id, treat.id === "flan" ? "caramel" : "strawberry", 84)}
+      ${treatSvg(treat.id, treat.id === "pancakes" ? "syrup" : treat.id === "flan" ? "caramel" : "strawberry", 84)}
       <div>
         <h3>${esc(treat.name)} ${locked ? `<em>Level ${treat.unlockLevel}</em>` : ""}</h3>
         <p>${esc(describeNeeds(treat.needs))}</p>
@@ -1514,6 +1545,7 @@ function renderRecipes() {
         <h3>${esc(drink.name)} ${locked ? `<em>Level ${drink.unlockLevel}</em>` : ""}</h3>
         <p>${esc(needs || "Ready to pour")}</p>
         <p class="sub">${esc(drinkSteps(drink.id).map((step) => step.name).join(" → "))}</p>
+        ${drink.id === "matcha" ? `<p class="sub">Add milk if you like.</p>` : ""}
         <p class="sub">${money(drink.price)}</p>
       </div>
     </article>`;
@@ -1544,7 +1576,7 @@ function renderSettings() {
     <div class="logo-grid">${LOGOS.map((item) => {
       const on = state.logo?.kind === item.kind && state.logo?.id === item.id;
       return `<button type="button" class="choice ${on ? "is-on" : ""}" data-act="pick-logo" data-id="${item.kind}:${item.id}" aria-pressed="${on}">
-        ${item.kind === "drink" ? drinkSvg(item.id, 56) : treatSvg(item.id, item.id === "flan" ? "caramel" : "plain", 56)}
+        ${item.kind === "drink" ? drinkSvg(item.id, 56) : treatSvg(item.id, sampleTopping(item.id), 56)}
         <span class="name">${esc(item.name)}</span>
       </button>`;
     }).join("")}</div>
@@ -1565,7 +1597,7 @@ function renderHelp() {
       <li><b>3.</b> A happy customer pays ${coinSvg(22)} Ingredients stay if the order is wrong.</li>
       <li><b>4.</b> A Selling Season is ${esc(formatDuration(SEASON_PLAY_MS))} of baking and shopping. Leave whenever you want. The minutes are saved, and they add up.</li>
       <li><b>5.</b> When the season timer fills, you unlock something new. The bakery never closes.</li>
-      <li><b>6.</b> Orders are calm mail requests. There is no timer. Make each item, put it in the box, close it, and tap Ship. The Selling Season clock waits while Orders is open.</li>
+      <li><b>6.</b> Orders are calm mail requests. There is no timer. Make each item, put it in the box, close it, pick a ribbon, and tap Ship. The sticker uses your baker name. The Selling Season clock waits while Orders is open.</li>
     </ol>
     ${textBtn("howto", "Show me how", "btn-go")}
     <p class="fine">On an iPhone or iPad, tap Share, then Add to Home Screen.</p>

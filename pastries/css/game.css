@@ -539,6 +539,19 @@ h2, h3 { margin: 0; }
   box-shadow: var(--shadow);
 }
 
+.ribbon-row {
+  flex-wrap: wrap;
+  justify-content: center;
+  overflow: visible;
+}
+.ribbon-row .choice { width: 76px; }
+.ribbon-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  display: block;
+}
 .mail-list { display: flex; flex-direction: column; gap: 10px; }
 .mail-card {
   width: 100%;

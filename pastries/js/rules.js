@@ -16,6 +16,7 @@ import {
   INGREDIENTS,
   LOGOS,
   MUSIC_TRACKS,
+  RIBBONS,
   SEASON_PLAY_MS,
   SEASON_START_BONUS,
   SHOP,
@@ -52,6 +53,7 @@ export function newGame() {
       fruit: 5,
       chocolate: 5,
       sprinkles: 4,
+      matcha: 4,
     },
     upgrades: { cozyOven: false, tipJar: false, secondChance: false },
     decor: {},
@@ -87,20 +89,21 @@ export function normalize(data) {
         bonusPaid: season.bonusPaid !== false,
         ...(() => {
           const orderDrink = DRINKS.some((d) => d.id === order.drink) ? order.drink : null;
-          const orderFloat = order.float === "marshmallow" ? "marshmallow" : null;
+          const orderFloat = keptFloat(orderDrink, order.float);
           const plateDrink = DRINKS.some((d) => d.id === season.plate?.drink) ? season.plate.drink : null;
-          const plateFloat = season.plate?.float === "marshmallow" ? "marshmallow" : null;
+          const plateFloat = keptFloat(plateDrink, season.plate?.float);
           const sips = cleanSips(
             { drink: orderDrink, float: orderFloat },
             { drink: plateDrink, float: plateFloat, sips: season.plate?.sips },
           );
-          const made = drinkSteps(orderDrink, orderFloat).length > 0 && sips.length === drinkSteps(orderDrink, orderFloat).length;
+          const required = requiredDrinkSteps(orderDrink, orderFloat);
+          const made = required.length > 0 && required.every((step, index) => sips[index] === step.id);
           return {
             plate: {
               treat: TREATS.some((t) => t.id === season.plate?.treat) ? season.plate.treat : null,
               topping: TOPPINGS.some((t) => t.id === season.plate?.topping) ? season.plate.topping : null,
               drink: made ? orderDrink : null,
-              float: made && orderFloat === "marshmallow" ? "marshmallow" : null,
+              float: made ? keptFloat(orderDrink, sips.includes("matcha-milk") ? "milk" : orderFloat) : null,
               sips,
             },
             order: {
@@ -187,6 +190,16 @@ export function drinkSteps(drinkId, floatId) {
   return steps.filter((step) => !step.when || step.when === floatId);
 }
 
+export function requiredDrinkSteps(drinkId, floatId) {
+  return drinkSteps(drinkId, floatId).filter((step) => step.optional !== "milk" || floatId === "milk");
+}
+
+export function keptFloat(drinkId, floatId) {
+  if (drinkId === "hot-chocolate" && floatId === "marshmallow") return "marshmallow";
+  if (drinkId === "matcha" && floatId === "milk") return "milk";
+  return null;
+}
+
 function cleanSips(order, plate) {
   const steps = drinkSteps(order?.drink, order?.float);
   const ids = steps.map((step) => step.id);
@@ -196,7 +209,9 @@ function cleanSips(order, plate) {
     if (raw[i] === ids[i]) sips.push(ids[i]);
     else break;
   }
-  if (plate?.drink && plate.drink === order?.drink && (!order?.float || plate?.float === order.float)) return ids;
+  const required = requiredDrinkSteps(order?.drink, order?.float).map((step) => step.id);
+  const finished = plate?.drink && plate.drink === order?.drink && keptFloat(order?.drink, plate?.float) === keptFloat(order?.drink, order?.float);
+  if (finished && required.length) return required;
   return sips;
 }
 
@@ -370,6 +385,7 @@ export function totalNeeds(treatId, toppingId, qty = 1, drinkId = null, floatId 
   add(topping && topping.needs, qty);
   add(drink && drink.needs, 1);
   if (floatId === "marshmallow") add(getTopping("marshmallow")?.needs, 1);
+  if (floatId === "milk") add({ milk: 1 }, 1);
   return needs;
 }
 
@@ -413,7 +429,7 @@ export function describeOrder(order) {
   const topping = getTopping(order.topping);
   if (!treat || !topping) return { line: "One treat, please!", wanted: "a treat" };
   const drink = getDrink(order.drink);
-  const noun = order.qty === 2 ? treat.plural : treat.name.toLowerCase();
+  const noun = order.qty === 2 ? treat.plural : (treat.single || treat.name.toLowerCase());
   const count = order.qty === 2 ? "Two" : "One";
   const treatBit = topping.id === "plain"
     ? `${count} ${topping.phrase} ${noun}`
@@ -421,7 +437,9 @@ export function describeOrder(order) {
   const extra = drink
     ? (drink.id === "hot-chocolate" && order.float === "marshmallow"
       ? " and a hot chocolate with marshmallows"
-      : ` and ${drink.with}`)
+      : drink.id === "matcha" && order.float === "milk"
+        ? " and a matcha with milk"
+        : ` and ${drink.with}`)
     : "";
   const line = `${treatBit}${extra}, please!`;
   const wantedBit = topping.id === "plain"
@@ -446,6 +464,7 @@ export function payout(state, order, fast) {
   const drink = getDrink(order.drink);
   if (drink) coins += drink.price;
   if (order.float === "marshmallow") coins += getTopping("marshmallow")?.priceAdd || 0;
+  if (order.float === "milk") coins += 2;
   coins += customer.payBonus || 0;
   if (fast) coins += 2;
   if (state.upgrades.tipJar) coins += 2;
@@ -504,7 +523,11 @@ export function rollOrder(state, rng = Math.random) {
     const pool = makeable.length && rng() < 0.75 ? makeable : open;
     drink = pool.length ? pick(pool, rng).id : null;
   }
-  const float = drink === "hot-chocolate" && rng() < COCOA_MARSHMALLOW_CHANCE ? "marshmallow" : null;
+  const float = drink === "hot-chocolate" && rng() < COCOA_MARSHMALLOW_CHANCE
+    ? "marshmallow"
+    : drink === "matcha" && rng() < 0.45
+      ? "milk"
+      : null;
   return { treat: treat.id, topping: topping.id, qty, customer: customer.id, vip, drink, float };
 }
 
@@ -531,6 +554,7 @@ function rollMailItem(state, rng) {
   if (wantDrink) {
     drink = pick(drinks, rng).id;
     if (drink === "hot-chocolate" && rng() < 0.45) float = "marshmallow";
+    if (drink === "matcha" && rng() < 0.45) float = "milk";
   }
   return { treat, topping, drink, float };
 }
@@ -548,7 +572,7 @@ export function rollMailJob(state, rng = Math.random) {
     packed: 0,
     closed: false,
     ribbon: null,
-    sticker: null,
+    sticker: "bakery",
     plate: blankMailPlate(),
   };
 }
@@ -567,7 +591,7 @@ function cleanMailItem(item, level) {
     treat: treatOk ? treat.id : null,
     topping: treatOk ? topping.id : null,
     drink: drinkOk ? drink.id : null,
-    float: drinkOk && drink.id === "hot-chocolate" && item.float === "marshmallow" ? "marshmallow" : null,
+    float: drinkOk ? keptFloat(drink.id, item.float) : null,
   };
 }
 
@@ -578,13 +602,15 @@ function cleanMailJob(job, state, rng) {
   const packed = Math.max(0, Math.min(items.length, Math.round(Number(job.packed) || 0)));
   const drink = items[packed]?.drink;
   const float = items[packed]?.float;
-  const steps = drink ? drinkSteps(drink, float).map((step) => step.id) : [];
+  const visible = drink ? drinkSteps(drink, float) : [];
+  const required = drink ? requiredDrinkSteps(drink, float) : [];
   const rawSips = Array.isArray(job.plate?.sips) ? job.plate.sips : [];
   const sips = [];
-  for (let i = 0; i < steps.length; i += 1) {
-    if (rawSips[i] === steps[i]) sips.push(steps[i]);
+  for (let i = 0; i < visible.length; i += 1) {
+    if (rawSips[i] === visible[i].id) sips.push(visible[i].id);
     else break;
   }
+  const ready = required.length > 0 && required.every((step, index) => sips[index] === step.id);
   const person = getCustomer(job.customer);
   const customer = person.unlockLevel <= state.level ? person.id : unlockedCustomers(state.level)[0].id;
   return {
@@ -593,13 +619,13 @@ function cleanMailJob(job, state, rng) {
     items,
     packed,
     closed: !!job.closed && packed === items.length,
-    ribbon: typeof job.ribbon === "string" ? job.ribbon : null,
-    sticker: typeof job.sticker === "string" ? job.sticker : null,
+    ribbon: RIBBONS.some((ribbon) => ribbon.id === job.ribbon) ? job.ribbon : null,
+    sticker: typeof job.sticker === "string" && job.sticker ? job.sticker : "bakery",
     plate: {
       treat: getTreat(job.plate?.treat) ? job.plate.treat : null,
       topping: getTopping(job.plate?.topping) ? job.plate.topping : null,
-      drink: sips.length && sips.length === steps.length ? drink : null,
-      float: sips.length && sips.length === steps.length ? (float || null) : null,
+      drink: ready ? drink : null,
+      float: ready ? keptFloat(drink, sips.includes("matcha-milk") ? "milk" : float) : null,
       sips,
     },
   };
@@ -620,6 +646,7 @@ export function describeMailItem(item) {
   }
   if (item?.drink) {
     if (item.drink === "hot-chocolate" && item.float === "marshmallow") bits.push("hot chocolate with marshmallows");
+    else if (item.drink === "matcha" && item.float === "milk") bits.push("a matcha with milk");
     else bits.push(getDrink(item.drink)?.with || "a drink");
   }
   return bits.join(" and ") || "A treat";
@@ -629,7 +656,12 @@ export function mailItemReady(plate, item) {
   const current = plate || {};
   if (!item || (!item.treat && !item.drink)) return false;
   if (item.treat && (current.treat !== item.treat || current.topping !== item.topping)) return false;
-  if (item.drink && (current.drink !== item.drink || (current.float || null) !== (item.float || null))) return false;
+  if (item.drink) {
+    if (current.drink !== item.drink) return false;
+    const want = keptFloat(item.drink, item.float);
+    const have = keptFloat(item.drink, current.float);
+    if (have !== want && !(item.drink === "matcha" && !want && have === "milk")) return false;
+  }
   return true;
 }
 
@@ -648,6 +680,7 @@ export function mailPay(state, item) {
   const drink = getDrink(item?.drink);
   let coins = drink ? drink.price : 0;
   if (item?.float === "marshmallow") coins += getTopping("marshmallow")?.priceAdd || 0;
+  if (item?.float === "milk") coins += 2;
   if (state.upgrades?.tipJar) coins += 2;
   return coins;
 }
@@ -658,11 +691,14 @@ export function packMailItem(state, index) {
   const item = job?.items?.[job.packed];
   if (!job || !item || job.closed) return { state, ok: false, reason: "done" };
   if (!mailItemReady(job.plate, item)) return { state, ok: false, reason: "incomplete" };
-  const needs = totalNeeds(item.treat, item.topping, 1, item.drink, item.float);
+  const poured = keptFloat(item.drink, item.float) || (item.drink === "matcha" && job.plate?.float === "milk" ? "milk" : null);
+  const needs = totalNeeds(item.treat, item.topping, 1, item.drink, poured);
   const missing = missingIngredients(state.pantry, needs);
   if (missing.length) return { state, ok: false, reason: "short", missing };
+  const items = job.items.slice();
+  if (poured && poured !== item.float) items[job.packed] = { ...item, float: poured };
   const mail = jobs.slice();
-  mail[index] = { ...job, packed: job.packed + 1, plate: blankMailPlate() };
+  mail[index] = { ...job, items, packed: job.packed + 1, plate: blankMailPlate() };
   return { state: { ...state, pantry: subtractPantry(state.pantry, needs), mail }, ok: true };
 }
 
@@ -674,9 +710,17 @@ export function closeMailBox(state, index) {
   return { ...state, mail };
 }
 
+export function chooseMailRibbon(state, index, ribbonId) {
+  const job = state.mail?.[index];
+  if (!job?.closed || !RIBBONS.some((ribbon) => ribbon.id === ribbonId)) return state;
+  const mail = state.mail.slice();
+  mail[index] = { ...job, ribbon: ribbonId };
+  return { ...state, mail };
+}
+
 export function shipMail(state, index, rng = Math.random) {
   const job = state.mail?.[index];
-  if (!job?.closed) return { state, ok: false, pay: 0 };
+  if (!job?.closed || !RIBBONS.some((ribbon) => ribbon.id === job.ribbon)) return { state, ok: false, pay: 0 };
   const pay = job.items.reduce((sum, item) => sum + mailPay(state, item), 0);
   const mail = state.mail.slice();
   mail[index] = rollMailJob(state, rng);
@@ -697,34 +741,61 @@ export function setMailPlate(state, index, plate) {
       treat: plate?.treat || null,
       topping: plate?.topping || null,
       drink: plate?.drink || null,
-      float: plate?.float === "marshmallow" ? "marshmallow" : null,
+      float: plate?.float === "marshmallow" || plate?.float === "milk" ? plate.float : null,
       sips: Array.isArray(plate?.sips) ? plate.sips.filter((id) => typeof id === "string") : [],
     },
   };
   return { ...state, mail };
 }
 
+function advanceDrink(drinkId, orderFloat, sips, stepId) {
+  const steps = drinkSteps(drinkId, orderFloat);
+  const required = requiredDrinkSteps(drinkId, orderFloat);
+  const done = Array.isArray(sips) ? sips : [];
+  const optional = steps.find((step) => step.optional === "milk");
+  const requiredDone = required.length > 0 && required.every((step, index) => done[index] === step.id);
+  if (requiredDone && optional && stepId === optional.id && !done.includes(optional.id)) {
+    return { result: "made", hint: optional.hint, sips: [...done, optional.id], drink: drinkId, float: "milk" };
+  }
+  if (requiredDone) {
+    return {
+      result: "done",
+      hint: "",
+      sips: done,
+      drink: drinkId,
+      float: keptFloat(drinkId, done.includes("matcha-milk") ? "milk" : orderFloat),
+    };
+  }
+  const next = required[done.length];
+  if (!next || stepId !== next.id) return { result: "hint", hint: next?.hint || "Try the next step!", next: next?.id || "" };
+  const nextSips = [...done, stepId];
+  const made = required.every((step, index) => nextSips[index] === step.id);
+  const poured = nextSips.includes("matcha-milk") ? "milk" : (nextSips.includes("marshmallow") ? "marshmallow" : null);
+  return {
+    result: made ? "made" : "ok",
+    hint: next.hint,
+    sips: nextSips,
+    drink: made ? drinkId : null,
+    float: made ? keptFloat(drinkId, poured) : null,
+  };
+}
+
 export function applyMailSip(state, index, stepId) {
   const job = state.mail?.[index];
   const item = job?.items?.[job.packed];
   if (!job || !item?.drink || job.closed) return { state, result: "none", hint: "" };
-  const steps = drinkSteps(item.drink, item.float);
-  const sips = job.plate?.sips || [];
-  if (sips.length >= steps.length) return { state, result: "done", hint: "" };
-  const next = steps[sips.length];
-  if (stepId !== next.id) return { state, result: "hint", hint: next.hint, next: next.id };
-  const nextSips = [...sips, stepId];
-  const made = nextSips.length === steps.length;
+  const step = advanceDrink(item.drink, item.float, job.plate?.sips, stepId);
+  if (step.result === "hint" || step.result === "done") return { state, result: step.result, hint: step.hint, next: step.next || "" };
   return {
     state: setMailPlate(state, index, {
       treat: job.plate?.treat || null,
       topping: job.plate?.topping || null,
-      drink: made ? item.drink : null,
-      float: made && item.float === "marshmallow" ? "marshmallow" : null,
-      sips: nextSips,
+      drink: step.drink,
+      float: step.float,
+      sips: step.sips,
     }),
-    result: made ? "made" : "ok",
-    hint: next.hint,
+    result: step.result,
+    hint: step.hint,
   };
 }
 
@@ -765,21 +836,19 @@ export function withOrder(state, order) {
 export function applySip(state, stepId) {
   const order = state.season?.order;
   if (!state.season || !order?.drink) return { state, result: "none", hint: "" };
-  const steps = drinkSteps(order.drink, order.float);
-  const sips = state.season.plate?.sips || [];
-  if (sips.length >= steps.length) return { state, result: "done", hint: "" };
-  const next = steps[sips.length];
-  if (stepId !== next.id) return { state, result: "hint", hint: next.hint, next: next.id };
-  const nextSips = [...sips, stepId];
-  const made = nextSips.length === steps.length;
-  const nextState = setPlate(state, {
-    treat: state.season.plate?.treat || null,
-    topping: state.season.plate?.topping || null,
-    drink: made ? order.drink : null,
-    float: made && order.float === "marshmallow" ? "marshmallow" : null,
-    sips: nextSips,
-  });
-  return { state: nextState, result: made ? "made" : "ok", hint: next.hint };
+  const step = advanceDrink(order.drink, order.float, state.season.plate?.sips, stepId);
+  if (step.result === "hint" || step.result === "done") return { state, result: step.result, hint: step.hint, next: step.next || "" };
+  return {
+    state: setPlate(state, {
+      treat: state.season.plate?.treat || null,
+      topping: state.season.plate?.topping || null,
+      drink: step.drink,
+      float: step.float,
+      sips: step.sips,
+    }),
+    result: step.result,
+    hint: step.hint,
+  };
 }
 
 export function setPlate(state, plate) {
@@ -792,7 +861,7 @@ export function setPlate(state, plate) {
         treat: plate?.treat || null,
         topping: plate?.topping || null,
         drink: plate?.drink || null,
-        float: plate?.float === "marshmallow" ? "marshmallow" : null,
+        float: plate?.float === "marshmallow" || plate?.float === "milk" ? plate.float : null,
         sips: Array.isArray(plate?.sips) ? plate.sips.filter((id) => typeof id === "string") : [],
       },
     },
@@ -806,14 +875,18 @@ export function tryServe(state, { fast = false } = {}) {
   const plate = season.plate || blankPlate();
   if (!plate.treat || !plate.topping) return { state, result: "incomplete" };
   if (season.order.drink && !plate.drink) return { state, result: "need-drink" };
-  if (season.order.float && plate.float !== season.order.float) return { state, result: "need-float" };
-  const needs = totalNeeds(plate.treat, plate.topping, season.order.qty || 1, plate.drink, plate.float);
+  if (season.order.float && keptFloat(season.order.drink, plate.float) !== keptFloat(season.order.drink, season.order.float)) {
+    return { state, result: "need-float" };
+  }
+  const servedFloat = plate.float === "milk" && season.order.drink === "matcha" ? "milk" : plate.float;
+  const needs = totalNeeds(plate.treat, plate.topping, season.order.qty || 1, plate.drink, servedFloat);
   const missing = missingIngredients(state.pantry, needs);
   if (missing.length) return { state, result: "short", missing };
+  const optionalMilk = season.order.drink === "matcha" && !season.order.float && plate.float === "milk";
   const match = plate.treat === season.order.treat
     && plate.topping === season.order.topping
     && (plate.drink || null) === (season.order.drink || null)
-    && (plate.float || null) === (season.order.float || null);
+    && ((plate.float || null) === (season.order.float || null) || optionalMilk);
   if (!match) {
     const usedBell = !!(state.upgrades.secondChance && !season.usedSecondChance);
     return {
@@ -829,7 +902,7 @@ export function tryServe(state, { fast = false } = {}) {
       usedBell,
     };
   }
-  const pay = payout(state, season.order, fast);
+  const pay = payout(state, optionalMilk ? { ...season.order, float: "milk" } : season.order, fast);
   return {
     state: {
       ...state,
