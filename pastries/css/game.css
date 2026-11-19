@@ -456,6 +456,19 @@ h2, h3 { margin: 0; }
 .home-help .sheet { text-align: center; }
 .home-help .sheet p { font-weight: 800; margin: 8px 0; }
 .home-help svg { width: 88px; height: 88px; }
+.whats-new { z-index: 14; align-items: center; }
+.whats-new .sheet { text-align: center; }
+.whats-new h2 { color: var(--pink-deep); font-size: 2rem; margin: 4px 0 8px; }
+.whats-lines { list-style: none; padding: 0; margin: 8px 0 12px; }
+.whats-lines li {
+  background: #fff6ee;
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  font-weight: 800;
+  text-align: left;
+}
 .sheet { width: min(520px, 100%); padding: 14px; }
 .sheet .btn { width: 100%; }
 .sheet.inset { margin-top: 8px; }

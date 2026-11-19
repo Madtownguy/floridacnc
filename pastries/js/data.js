@@ -37,6 +37,30 @@ export function bakeryStickerText(value) {
 export const STORAGE_KEY = "pastries-and-more-v1";
 
 /**
+ * What's New card.
+ * Each future update must bump GAME_VERSION and add an UPDATES entry
+ * with that same version. The card lists that entry's lines once,
+ * the first time the game opens after the version changes.
+ */
+export const GAME_VERSION = "1";
+
+export const UPDATES = [
+  {
+    version: "1",
+    lines: [
+      "🍵 Matcha is here!",
+      "🥞 Fluffy Pancakes with syrup, butter, berries or marshmallows",
+      "🎀 Pick a ribbon color for your Orders boxes",
+      "🏷️ Your bakery sticker goes on every box",
+    ],
+  },
+];
+
+export function currentUpdate() {
+  return UPDATES.find((item) => item.version === GAME_VERSION) || null;
+}
+
+/**
  * How long one Selling Season lasts, in milliseconds of active play.
  * This is the only place to change the season length.
  *

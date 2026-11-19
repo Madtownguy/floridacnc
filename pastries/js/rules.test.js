@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DRINK_ORDER_CHANCE, DRINKS, MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, bakeryStickerText, cleanBakerName } from "./data.js";
+import { DRINK_ORDER_CHANCE, DRINKS, GAME_VERSION, MUSIC_TRACKS, SEASON_PLAY_MS, SEASON_START_BONUS, STORAGE_KEY, TREAT_UNLOCK_ORDER, TUTORIAL_STEPS, UPDATES, bakeryStickerText, cleanBakerName } from "./data.js";
 import {
   addPlaytime,
   applySip,
@@ -675,4 +675,49 @@ test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () 
   assert.equal(loaded.bakerName, "Chris");
   assert.equal(loaded.mail.length, 3);
   assert.ok(loaded.mail.every((job) => job.sticker === "bakery"));
+});
+
+test("what's new shows once per version and keeps the bakery", () => {
+  assert.equal(GAME_VERSION, "1");
+  assert.equal(UPDATES[0].version, GAME_VERSION);
+  assert.deepEqual(UPDATES[0].lines, [
+    "🍵 Matcha is here!",
+    "🥞 Fluffy Pancakes with syrup, butter, berries or marshmallows",
+    "🎀 Pick a ribbon color for your Orders boxes",
+    "🏷️ Your bakery sticker goes on every box",
+  ]);
+  assert.equal(newGame().seenVersion, "");
+  const store = memory();
+  store.setItem(STORAGE_KEY, JSON.stringify({
+    v: 1,
+    coins: 77,
+    level: 4,
+    bakerName: "Ada",
+    tutorialDone: true,
+    season: {
+      playedMs: 4000,
+      earned: 6,
+      bonusPaid: true,
+      limitMs: SEASON_PLAY_MS,
+      order: { treat: "cookie", topping: "plain", qty: 1, customer: "pip", vip: false },
+      plate: { treat: null, topping: null },
+    },
+  }));
+  const loaded = load(store);
+  assert.equal(loaded.coins, 77);
+  assert.equal(loaded.level, 4);
+  assert.equal(loaded.bakerName, "Ada");
+  assert.equal(loaded.tutorialDone, true);
+  assert.equal(loaded.seenVersion, "");
+  assert.equal(loaded.season.playedMs, 4000);
+  assert.equal(loaded.season.earned, 6);
+  loaded.seenVersion = GAME_VERSION;
+  save(loaded, store);
+  const again = load(store);
+  assert.equal(again.seenVersion, GAME_VERSION);
+  assert.equal(again.coins, 77);
+  assert.equal(again.level, 4);
+  store.setItem(STORAGE_KEY, JSON.stringify({ v: 1, coins: 12, seenVersion: 5 }));
+  assert.equal(load(store).seenVersion, "");
+  assert.equal(load(store).coins, 12);
 });
