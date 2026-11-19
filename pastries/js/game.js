@@ -594,7 +594,7 @@ function shipCurrent() {
   if (!out.ok) return;
   state = out.state;
   ui.toast = "";
-  ui.shipBurst = { pay: out.pay, name: who, ribbon: job.ribbon, sticker: job.sticker, note: out.note || "" };
+  ui.shipBurst = { pay: out.pay, name: who, ribbon: job.ribbon, ribbon2: job.made?.ribbon2 || job.wish?.ribbon2, sticker: job.sticker, note: out.note || "" };
   save(state);
   blip(660, 0.1);
   setTimeout(() => blip(880, 0.12), 120);
@@ -617,7 +617,9 @@ function mailHint() {
     if (job.packed) return { target: "close", text: "Tap Close the box." };
     if (!job.made?.frosting) return { target: "frosting", text: "Tap the frosting they asked for." };
     if (!job.made?.topping) return { target: "sprinkle", text: "Tap the topping." };
+    if (job.wish?.extra && !job.made?.extra) return { target: "extra", text: "Tap the extra decoration." };
     if (!job.made?.ribbon) return { target: "ribbon", text: "Tap the ribbon." };
+    if (job.wish?.ribbon2 && !job.made?.ribbon2) return { target: "ribbon2", text: "Tap another ribbon." };
     if (!job.made?.sticker) return { target: "sticker", text: "Tap your bakery sticker." };
     return { target: "pack", text: "Tap Put in the box." };
   }
@@ -1038,7 +1040,7 @@ function handle(act, id) {
     render();
     return;
   }
-  if (act === "party-frosting" || act === "party-topping" || act === "party-ribbon") {
+  if (act === "party-frosting" || act === "party-topping" || act === "party-extra" || act === "party-ribbon" || act === "party-ribbon2") {
     const key = act.slice("party-".length);
     state = setCustomDecor(state, ui.mailIndex, { [key]: id });
     save(state);
@@ -1208,6 +1210,7 @@ function renderCustomOrder(job, who, note, meter) {
     packed: job.packed ? 1 : 0,
     closed: job.closed,
     ribbon: made.ribbon || null,
+    ribbon2: made.ribbon2 || null,
     sticker: made.sticker ? "bakery" : null,
     label,
   };
@@ -1242,16 +1245,38 @@ function renderCustomOrder(job, who, note, meter) {
       <span class="name">${esc(ribbon.name)}</span>
     </button>`;
   }).join("");
+  const extraButtons = wish.extra ? PARTY_TOPPINGS.map((id) => {
+    const top = getTopping(id);
+    if (!top || top.unlockLevel > state.level) return "";
+    const on = made.extra === id;
+    const guide = made.frosting && made.topping && !made.extra && id === wish.extra;
+    const next = guide && hint?.target === "extra" ? " is-next" : "";
+    return `<button type="button" class="choice${on ? " is-on" : ""}${next}" data-act="party-extra" data-id="${id}" ${guide ? 'data-hint="extra"' : ""} aria-pressed="${on}">
+      ${toppingSvg(id, 48)}
+      <span class="name">${esc(top.name)}</span>
+    </button>`;
+  }).join("") : "";
+  const ribbon2Buttons = wish.ribbon2 ? RIBBONS.map((ribbon) => {
+    const on = made.ribbon2 === ribbon.id;
+    const guide = made.frosting && made.topping && (!wish.extra || made.extra) && made.ribbon && !made.ribbon2 && ribbon.id === wish.ribbon2;
+    const next = guide && hint?.target === "ribbon2" ? " is-next" : "";
+    return `<button type="button" class="choice${on ? " is-on" : ""}${next}" data-act="party-ribbon2" data-id="${ribbon.id}" ${guide ? 'data-hint="ribbon2"' : ""} aria-pressed="${on}">
+      <span class="ribbon-swatch" style="background:${ribbon.color}"></span>
+      <span class="name">${esc(ribbon.name)}</span>
+    </button>`;
+  }).join("") : "";
   const stickerOn = !!made.sticker;
-  const stickerGuide = made.frosting && made.topping && made.ribbon && !stickerOn;
+  const stickerGuide = made.frosting && made.topping && made.ribbon && (!wish.extra || made.extra) && (!wish.ribbon2 || made.ribbon2) && !stickerOn;
   const decorating = job.packed ? "" : `
     <div class="order-art mail-now">${treatSvg("cake", made.frosting || "plain", 120)}</div>
     <p class="row-label">Frosting color</p>
     <div class="scroller" data-scroller="frosting">${frostingButtons}</div>
     <p class="row-label">Sprinkles and toppings</p>
     <div class="scroller" data-scroller="party-tops">${toppingButtons}</div>
+    ${extraButtons ? `<p class="row-label">Extra decoration</p><div class="scroller" data-scroller="party-extra">${extraButtons}</div>` : ""}
     <p class="row-label">Ribbon</p>
     <div class="scroller ribbon-row" data-scroller="party-ribbons">${ribbonButtons}</div>
+    ${ribbon2Buttons ? `<p class="row-label">Another ribbon</p><div class="scroller ribbon-row" data-scroller="party-ribbon2">${ribbon2Buttons}</div>` : ""}
     <button type="button" class="btn ${stickerOn ? "btn-go" : ""}${stickerGuide && hint?.target === "sticker" ? " is-next" : ""}" data-act="party-sticker" ${stickerGuide ? 'data-hint="sticker"' : ""} aria-pressed="${stickerOn}">
       ${stickerOn ? "Bakery sticker is on" : "Add your bakery sticker"}
     </button>
@@ -1260,10 +1285,10 @@ function renderCustomOrder(job, who, note, meter) {
   const close = job.packed && !job.closed ? textBtn("close-box", "Close the box", "btn-go", "", "close") : "";
   const ship = job.closed ? textBtn("ship", "Ship", "btn-go", "", "ship") : "";
   return `<section class="screen sub" data-screen="orders" data-mail="${ui.mailIndex}" data-custom="1">
-    <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>🎉 ${esc(event?.name || "Party")}</h2><span class="pill">${money(state.coins)}</span></header>
+    <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>${esc(event?.emoji || "🎉")} ${esc(event?.name || "Party")}</h2><span class="pill">${money(state.coins)}</span></header>
     ${note}
     ${meter}
-    <p class="fine">${esc(who.name)} asked for a party cake.</p>
+    <p class="fine">${esc(who.name)} asked for a ${esc((event?.name || "party").toLowerCase())} cake.</p>
     <ul class="mail-lines">${wishes}</ul>
     <div class="mail-box-wrap" data-closed="${job.closed ? "1" : "0"}" data-packed="${job.packed ? "1" : "0"}">${job.packed ? mailBoxSvg(decor, 150) : ""}</div>
     ${decorating}
@@ -1276,7 +1301,7 @@ function renderOrders() {
   if (ui.shipBurst) {
     return `<section class="screen sub" data-screen="orders" data-shipped="1">
       <div class="ship-burst" role="status"><div class="ship-card">
-        ${mailBoxSvg({ packed: 0, closed: true, ribbon: ui.shipBurst.ribbon || BOX_DECOR.ribbon, sticker: ui.shipBurst.sticker || BOX_DECOR.sticker, label: bakeryStickerText(state.bakerName) }, 160)}
+        ${mailBoxSvg({ packed: 0, closed: true, ribbon: ui.shipBurst.ribbon || BOX_DECOR.ribbon, ribbon2: ui.shipBurst.ribbon2 || null, sticker: ui.shipBurst.sticker || BOX_DECOR.sticker, label: bakeryStickerText(state.bakerName) }, 160)}
         <h2>Shipped!</h2>
         <p>${esc(ui.shipBurst.note || `${ui.shipBurst.name} will be so happy.`)}</p>
         <p class="ship-pay">${money(ui.shipBurst.pay, 28)}</p>
@@ -1296,7 +1321,7 @@ function renderOrders() {
         const event = PARTY_EVENTS.find((item) => item.id === job.event);
         const wishes = describeCustomWish(job).map((line) => `<li>${esc(line)}</li>`).join("");
         return `<button type="button" class="mail-card custom-order${next}" data-act="open-order" data-id="${index}"${hint}>
-          <span class="mail-who"><span class="party-mark" aria-hidden="true">🎉</span><span><b>Custom Order</b><small>${esc(event?.name || "Party")} · ${esc(who.name)}</small></span></span>
+          <span class="mail-who"><span class="party-mark" aria-hidden="true">${esc(event?.emoji || "🎉")}</span><span><b>Custom Order</b><small>${esc(event?.name || "Party")} · ${esc(who.name)}</small></span></span>
           <ul class="mail-items">${wishes}</ul>
         </button>`;
       }
