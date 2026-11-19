@@ -42,9 +42,15 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * with that same version. The card lists that entry's lines once,
  * the first time the game opens after the version changes.
  */
-export const GAME_VERSION = "3";
+export const GAME_VERSION = "4";
 
 export const UPDATES = [
+  {
+    version: "4",
+    lines: [
+      "🎉 Custom Orders come way more often now!",
+    ],
+  },
   {
     version: "3",
     lines: [
@@ -246,6 +252,11 @@ export const RIBBONS = [
   { id: "purple", name: "Purple", color: "#a78bfa" },
   { id: "gold", name: "Gold", color: "#e8b931" },
 ];
+
+/** Share of newly rolled Orders that are Custom event cakes.
+ *  More than half, and the list keeps one waiting when a roll would leave a gap.
+ */
+export const CUSTOM_ORDER_CHANCE = 2 / 3;
 
 /** Party cakes in Orders. Each event uses toppings and ribbons already in the game.
  *  Wedding asks for a second ribbon and an extra decoration, and pays a bigger bonus.

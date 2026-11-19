@@ -9,6 +9,7 @@ import {
   cleanBakerName,
   CUSTOMERS,
   COCOA_MARSHMALLOW_CHANCE,
+  CUSTOM_ORDER_CHANCE,
   DRINK_ORDER_CHANCE,
   DRINK_STEPS,
   DRINKS,
@@ -635,7 +636,7 @@ function rollPlainMailJob(state, rng) {
 }
 
 export function rollMailJob(state, rng = Math.random) {
-  if (rng() > 0.72) return rollCustomJob(state, rng);
+  if (rng() > 1 - CUSTOM_ORDER_CHANCE) return rollCustomJob(state, rng);
   return rollPlainMailJob(state, rng);
 }
 
@@ -737,11 +738,44 @@ function cleanMailJob(job, state, rng) {
   };
 }
 
+function mailUntouched(job) {
+  if (!job || job.kind === "custom") return false;
+  if (job.packed || job.closed || job.ribbon) return false;
+  const plate = job.plate || {};
+  return !plate.treat && !plate.topping && !plate.drink && !(plate.sips || []).length;
+}
+
+function keepACustom(jobs, state, rng, keptCount) {
+  if (jobs.some((job) => job.kind === "custom")) return jobs;
+  const next = jobs.slice();
+  let index = keptCount < next.length ? next.length - 1 : -1;
+  if (index < 0) {
+    for (let i = next.length - 1; i >= 0; i -= 1) {
+      if (mailUntouched(next[i])) {
+        index = i;
+        break;
+      }
+    }
+  }
+  if (index >= 0 && (index >= keptCount || mailUntouched(next[index]))) {
+    next[index] = rollCustomJob(state, rng);
+  }
+  return next;
+}
+
+function replaceMailJob(mail, index, state, rng) {
+  const next = mail.slice();
+  next[index] = rollMailJob(state, rng);
+  if (!next.some((job) => job.kind === "custom")) next[index] = rollCustomJob(state, rng);
+  return next;
+}
+
 export function normalizeMail(raw, state, rng = Math.random) {
   const jobs = Array.isArray(raw) ? raw : [];
   const next = jobs.slice(0, 3).map((job) => cleanMailJob(job, state, rng));
+  const kept = next.length;
   while (next.length < 3) next.push(rollMailJob(state, rng));
-  return next;
+  return keepACustom(next, state, rng, kept);
 }
 
 export function scoreCustom(job) {
@@ -933,8 +967,7 @@ export function shipMail(state, index, rng = Math.random) {
   if (job.kind === "custom") {
     const score = scoreCustom(job);
     const pay = customPay(state, score);
-    const mail = state.mail.slice();
-    mail[index] = rollMailJob(state, rng);
+    const mail = replaceMailJob(state.mail, index, state, rng);
     return {
       state: { ...state, coins: state.coins + pay, mail },
       ok: true,
@@ -946,8 +979,7 @@ export function shipMail(state, index, rng = Math.random) {
   }
   if (!RIBBONS.some((ribbon) => ribbon.id === job.ribbon)) return { state, ok: false, pay: 0, note: "" };
   const pay = job.items.reduce((sum, item) => sum + mailPay(state, item), 0);
-  const mail = state.mail.slice();
-  mail[index] = rollMailJob(state, rng);
+  const mail = replaceMailJob(state.mail, index, state, rng);
   return {
     state: { ...state, coins: state.coins + pay, mail },
     ok: true,
