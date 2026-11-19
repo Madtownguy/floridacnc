@@ -21,6 +21,15 @@ import {
   tutorialOrder,
   drinkSteps,
   unlockedTreats,
+  rollMailJob,
+  normalizeMail,
+  applyMailSip,
+  setMailPlate,
+  packMailItem,
+  closeMailBox,
+  shipMail,
+  mailPay,
+  mailItemReady,
 } from "./rules.js";
 import { load, save } from "./state.js";
 
@@ -473,4 +482,137 @@ test("drinks are made one step at a time, and a wrong tap only hints", () => {
   assert.equal(loaded.coins, 64);
   assert.deepEqual(loaded.season.plate.sips, ["cup", "pour-coffee"]);
   assert.equal(loaded.season.plate.drink, "coffee");
+});
+
+test("mail orders are calm, pay like a serve, and migrate without wiping the bakery", () => {
+  const zero = () => 0;
+  const fresh = newGame();
+  const sample = rollMailJob(fresh, zero);
+  assert.equal(sample.customer, "sunny");
+  assert.equal(sample.items.length, 1);
+  assert.deepEqual(sample.items[0], { treat: "cupcake", topping: "plain", drink: null, float: null });
+  assert.equal(sample.ribbon, null);
+  assert.equal(sample.sticker, null);
+  assert.equal(sample.packed, 0);
+  assert.equal(sample.closed, false);
+
+  const open = new Set(unlockedTreats(1).map((treat) => treat.id));
+  for (const job of normalizeMail(null, fresh, zero)) {
+    assert.ok(job.items.length >= 1 && job.items.length <= 3);
+    for (const item of job.items) {
+      assert.ok(item.treat || item.drink);
+      if (item.treat) assert.ok(open.has(item.treat));
+    }
+  }
+
+  let state = startSeason(fresh, zero);
+  state = { ...state, season: { ...state.season, playedMs: 5000, earned: 9 } };
+  const purse = state.coins;
+  state = {
+    ...state,
+    mail: normalizeMail([{
+      id: "keep-me",
+      customer: "mayor",
+      ribbon: "pink-bow",
+      sticker: "star",
+      packed: 0,
+      items: [
+        { treat: "cake", topping: "strawberry" },
+        { treat: "cupcake", topping: "strawberry", drink: "milk" },
+      ],
+      plate: { sips: ["pour-milk"] },
+    }], state, zero),
+  };
+  assert.equal(state.mail.length, 3);
+  assert.equal(state.mail[0].id, "keep-me");
+  assert.equal(state.mail[0].customer, "sunny");
+  assert.equal(state.mail[0].ribbon, "pink-bow");
+  assert.equal(state.mail[0].sticker, "star");
+  assert.equal(state.mail[0].items.length, 1);
+  assert.equal(state.mail[0].items[0].treat, "cupcake");
+  assert.equal(state.mail[0].items[0].drink, "milk");
+  assert.deepEqual(state.mail[0].plate.sips, []);
+  const kept = [state.mail[1].id, state.mail[2].id];
+
+  const item = state.mail[0].items[0];
+  const wrong = applyMailSip(state, 0, "pour-milk");
+  assert.equal(wrong.result, "hint");
+  assert.equal(wrong.state.pantry.milk, state.pantry.milk);
+  assert.equal(wrong.state.coins, purse);
+  state = applyMailSip(state, 0, "glass").state;
+  state = setMailPlate(state, 0, {
+    treat: "cupcake",
+    topping: "strawberry",
+    drink: null,
+    float: null,
+    sips: state.mail[0].plate.sips,
+  });
+  assert.equal(mailItemReady(state.mail[0].plate, item), false);
+  const early = packMailItem(state, 0);
+  assert.equal(early.ok, false);
+  assert.equal(early.state.pantry.flour, state.pantry.flour);
+  state = applyMailSip(state, 0, "pour-milk").state;
+  assert.equal(state.mail[0].plate.drink, "milk");
+  assert.equal(mailItemReady(state.mail[0].plate, item), true);
+  assert.equal(mailPay(state, item), 8 + 2 + 3);
+
+  const packed = packMailItem(state, 0);
+  assert.equal(packed.ok, true);
+  assert.equal(packed.state.mail[0].packed, 1);
+  assert.equal(packed.state.coins, purse);
+  assert.equal(packed.state.pantry.flour, state.pantry.flour - 1);
+  assert.equal(packed.state.pantry.fruit, state.pantry.fruit - 1);
+  assert.equal(packed.state.pantry.milk, state.pantry.milk - 1);
+  assert.equal(packed.state.season.playedMs, 5000);
+  state = closeMailBox(packed.state, 0);
+  assert.equal(state.mail[0].closed, true);
+  const shipped = shipMail(state, 0, zero);
+  assert.equal(shipped.ok, true);
+  assert.equal(shipped.pay, 13);
+  assert.equal(shipped.state.coins, purse + 13);
+  assert.equal(shipped.state.season.playedMs, 5000);
+  assert.equal(shipped.state.season.earned, 9);
+  assert.notEqual(shipped.state.mail[0].id, "keep-me");
+  assert.deepEqual([shipped.state.mail[1].id, shipped.state.mail[2].id], kept);
+  assert.equal(shipped.state.tutorialDone, fresh.tutorialDone);
+
+  const store = memory();
+  store.setItem(STORAGE_KEY, JSON.stringify({
+    v: 1,
+    coins: 77,
+    level: 2,
+    tutorialDone: true,
+    bakerName: "Ada",
+    logo: { kind: "treat", id: "donut" },
+    season: {
+      playedMs: 12000,
+      earned: 6,
+      bonusPaid: true,
+      limitMs: SEASON_PLAY_MS,
+      sold: 1,
+      missed: 0,
+      order: { treat: "cookie", topping: "plain", qty: 1, customer: "pip", vip: false },
+      plate: { treat: "cookie", topping: "plain" },
+    },
+  }));
+  const loaded = load(store);
+  assert.equal(loaded.coins, 77);
+  assert.equal(loaded.level, 2);
+  assert.equal(loaded.tutorialDone, true);
+  assert.equal(loaded.bakerName, "Ada");
+  assert.deepEqual(loaded.logo, { kind: "treat", id: "donut" });
+  assert.equal(loaded.season.playedMs, 12000);
+  assert.equal(loaded.season.earned, 6);
+  assert.equal(loaded.season.order.treat, "cookie");
+  assert.equal(loaded.mail.length, 3);
+  const allowed = new Set(unlockedTreats(2).map((treat) => treat.id));
+  for (const job of loaded.mail) {
+    assert.ok(job.items.length >= 1 && job.items.length <= 3);
+    assert.equal(job.ribbon, null);
+    assert.equal(job.sticker, null);
+    for (const bit of job.items) {
+      assert.ok(bit.treat || bit.drink);
+      if (bit.treat) assert.ok(allowed.has(bit.treat));
+    }
+  }
 });
