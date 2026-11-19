@@ -17,6 +17,9 @@ import {
   LOGOS,
   MUSIC_TRACKS,
   RIBBONS,
+  PARTY_EVENTS,
+  PARTY_FROSTING,
+  PARTY_TOPPINGS,
   SEASON_PLAY_MS,
   SEASON_START_BONUS,
   SHOP,
@@ -566,7 +569,38 @@ function rollMailItem(state, rng) {
   return { treat, topping, drink, float };
 }
 
-export function rollMailJob(state, rng = Math.random) {
+function blankCustomMade() {
+  return { frosting: null, topping: null, ribbon: null, sticker: false };
+}
+
+function partyChoices(ids, level) {
+  const open = ids.map((id) => getTopping(id)).filter((top) => top && top.unlockLevel <= level);
+  return open.length ? open : [getTopping("plain")].filter(Boolean);
+}
+
+export function rollCustomJob(state, rng = Math.random) {
+  const event = pick(PARTY_EVENTS, rng).id;
+  const customer = pick(unlockedCustomers(state.level), rng).id;
+  const frosting = pick(partyChoices(PARTY_FROSTING, state.level), rng).id;
+  const topping = pick(partyChoices(PARTY_TOPPINGS, state.level), rng).id;
+  const ribbon = pick(RIBBONS, rng).id;
+  return {
+    kind: "custom",
+    id: `party-${event}-${customer}-${frosting}`,
+    customer,
+    event,
+    wish: { frosting, topping, ribbon, sticker: true },
+    made: blankCustomMade(),
+    items: [{ treat: "cake", topping: frosting, drink: null, float: null }],
+    packed: 0,
+    closed: false,
+    ribbon: null,
+    sticker: null,
+    plate: blankMailPlate(),
+  };
+}
+
+function rollPlainMailJob(state, rng) {
   const count = 1 + Math.min(2, Math.floor(rng() * 3));
   const people = unlockedCustomers(state.level);
   const customer = pick(people, rng).id;
@@ -582,6 +616,11 @@ export function rollMailJob(state, rng = Math.random) {
     sticker: "bakery",
     plate: blankMailPlate(),
   };
+}
+
+export function rollMailJob(state, rng = Math.random) {
+  if (rng() > 0.72) return rollCustomJob(state, rng);
+  return rollPlainMailJob(state, rng);
 }
 
 function cleanMailItem(item, level) {
@@ -602,7 +641,42 @@ function cleanMailItem(item, level) {
   };
 }
 
+function cleanCustomJob(job, state, rng) {
+  const event = PARTY_EVENTS.some((item) => item.id === job?.event) ? job.event : null;
+  if (!event || !job.wish) return rollPlainMailJob(state, rng);
+  const frostings = partyChoices(PARTY_FROSTING, state.level);
+  const toppings = partyChoices(PARTY_TOPPINGS, state.level);
+  const frosting = frostings.some((top) => top.id === job.wish.frosting) ? job.wish.frosting : frostings[0].id;
+  const topping = toppings.some((top) => top.id === job.wish.topping) ? job.wish.topping : toppings[0].id;
+  const ribbon = RIBBONS.some((item) => item.id === job.wish.ribbon) ? job.wish.ribbon : RIBBONS[0].id;
+  const made = job.made && typeof job.made === "object" ? job.made : {};
+  const cleanMade = {
+    frosting: frostings.some((top) => top.id === made.frosting) ? made.frosting : null,
+    topping: toppings.some((top) => top.id === made.topping) ? made.topping : null,
+    ribbon: RIBBONS.some((item) => item.id === made.ribbon) ? made.ribbon : null,
+    sticker: !!made.sticker,
+  };
+  const packed = job.packed >= 1 ? 1 : 0;
+  const person = getCustomer(job.customer);
+  const customer = person.unlockLevel <= state.level ? person.id : unlockedCustomers(state.level)[0].id;
+  return {
+    kind: "custom",
+    id: typeof job.id === "string" && job.id ? job.id : `party-${event}-${customer}`,
+    customer,
+    event,
+    wish: { frosting, topping, ribbon, sticker: true },
+    made: cleanMade,
+    items: [{ treat: "cake", topping: frosting, drink: null, float: null }],
+    packed,
+    closed: !!job.closed && packed === 1,
+    ribbon: cleanMade.ribbon,
+    sticker: cleanMade.sticker ? "bakery" : null,
+    plate: blankMailPlate(),
+  };
+}
+
 function cleanMailJob(job, state, rng) {
+  if (job?.kind === "custom") return cleanCustomJob(job, state, rng);
   if (!job || typeof job !== "object") return rollMailJob(state, rng);
   const items = (Array.isArray(job.items) ? job.items : []).map((item) => cleanMailItem(item, state.level)).filter(Boolean).slice(0, 3);
   if (!items.length) return rollMailJob(state, rng);
@@ -643,6 +717,85 @@ export function normalizeMail(raw, state, rng = Math.random) {
   const next = jobs.slice(0, 3).map((job) => cleanMailJob(job, state, rng));
   while (next.length < 3) next.push(rollMailJob(state, rng));
   return next;
+}
+
+export function scoreCustom(job) {
+  const wish = job?.wish || {};
+  const made = job?.made || {};
+  const checks = [
+    !!wish.frosting && wish.frosting === made.frosting,
+    !!wish.topping && wish.topping === made.topping,
+    !!wish.ribbon && wish.ribbon === made.ribbon,
+    !!wish.sticker === !!made.sticker && !!wish.sticker,
+  ];
+  const matched = checks.filter(Boolean).length;
+  return { matched, total: checks.length, full: matched === checks.length };
+}
+
+export function customPay(state, score) {
+  let coins = getTreat("cake")?.price || 12;
+  coins += (score?.matched || 0) * 3;
+  if (score?.full) coins += 8;
+  if (state?.upgrades?.tipJar) coins += 2;
+  return coins;
+}
+
+export function customNote(score) {
+  if (score?.full) return "This is just what they hoped for!";
+  if ((score?.matched || 0) >= 2) return "They love the cake you made!";
+  return "They are so glad you baked for their party!";
+}
+
+export function describeCustomWish(job) {
+  const frost = getTopping(job?.wish?.frosting);
+  const top = getTopping(job?.wish?.topping);
+  const ribbon = RIBBONS.find((item) => item.id === job?.wish?.ribbon);
+  return [
+    `${frost?.name || "Vanilla"} frosting`,
+    top?.name || "Sprinkles",
+    `${ribbon?.name || "Pink"} ribbon`,
+    "Your bakery sticker",
+  ];
+}
+
+export function setCustomDecor(state, index, patch) {
+  const job = state.mail?.[index];
+  if (!job || job.kind !== "custom" || job.closed || job.packed >= 1) return state;
+  const made = { ...blankCustomMade(), ...job.made };
+  if (patch.frosting && partyChoices(PARTY_FROSTING, state.level).some((top) => top.id === patch.frosting)) {
+    made.frosting = made.frosting === patch.frosting ? null : patch.frosting;
+  }
+  if (patch.topping && partyChoices(PARTY_TOPPINGS, state.level).some((top) => top.id === patch.topping)) {
+    made.topping = made.topping === patch.topping ? null : patch.topping;
+  }
+  if (patch.ribbon && RIBBONS.some((ribbon) => ribbon.id === patch.ribbon)) {
+    made.ribbon = made.ribbon === patch.ribbon ? null : patch.ribbon;
+  }
+  if (patch.sticker === "toggle") made.sticker = !made.sticker;
+  const mail = state.mail.slice();
+  mail[index] = {
+    ...job,
+    made,
+    ribbon: made.ribbon,
+    sticker: made.sticker ? "bakery" : null,
+  };
+  return { ...state, mail };
+}
+
+export function packCustom(state, index) {
+  const job = state.mail?.[index];
+  if (!job || job.kind !== "custom" || job.closed || job.packed >= 1) return { state, ok: false, reason: "done" };
+  if (!job.made?.frosting) return { state, ok: false, reason: "incomplete" };
+  const needs = totalNeeds("cake", job.made.frosting, 1);
+  if (job.made.topping && job.made.topping !== job.made.frosting) {
+    const extra = getTopping(job.made.topping)?.needs || {};
+    for (const [id, n] of Object.entries(extra)) needs[id] = (needs[id] || 0) + n;
+  }
+  const missing = missingIngredients(state.pantry, needs);
+  if (missing.length) return { state, ok: false, reason: "short", missing };
+  const mail = state.mail.slice();
+  mail[index] = { ...job, packed: 1, plate: blankMailPlate() };
+  return { state: { ...state, pantry: subtractPantry(state.pantry, needs), mail }, ok: true };
 }
 
 export function describeMailItem(item) {
@@ -727,7 +880,22 @@ export function chooseMailRibbon(state, index, ribbonId) {
 
 export function shipMail(state, index, rng = Math.random) {
   const job = state.mail?.[index];
-  if (!job?.closed || !RIBBONS.some((ribbon) => ribbon.id === job.ribbon)) return { state, ok: false, pay: 0 };
+  if (!job?.closed) return { state, ok: false, pay: 0, note: "" };
+  if (job.kind === "custom") {
+    const score = scoreCustom(job);
+    const pay = customPay(state, score);
+    const mail = state.mail.slice();
+    mail[index] = rollMailJob(state, rng);
+    return {
+      state: { ...state, coins: state.coins + pay, mail },
+      ok: true,
+      pay,
+      note: customNote(score),
+      full: score.full,
+      matched: score.matched,
+    };
+  }
+  if (!RIBBONS.some((ribbon) => ribbon.id === job.ribbon)) return { state, ok: false, pay: 0, note: "" };
   const pay = job.items.reduce((sum, item) => sum + mailPay(state, item), 0);
   const mail = state.mail.slice();
   mail[index] = rollMailJob(state, rng);

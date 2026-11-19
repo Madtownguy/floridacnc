@@ -22,15 +22,21 @@ import {
   drinkSteps,
   unlockedTreats,
   rollMailJob,
+  rollCustomJob,
   normalizeMail,
   applyMailSip,
   setMailPlate,
   packMailItem,
+  packCustom,
   closeMailBox,
   shipMail,
   chooseMailRibbon,
   mailPay,
   mailItemReady,
+  scoreCustom,
+  customPay,
+  customNote,
+  setCustomDecor,
 } from "./rules.js";
 import { load, save } from "./state.js";
 
@@ -612,11 +618,16 @@ test("mail orders are calm, pay like a serve, and migrate without wiping the bak
   const allowed = new Set(unlockedTreats(2).map((treat) => treat.id));
   for (const job of loaded.mail) {
     assert.ok(job.items.length >= 1 && job.items.length <= 3);
-    assert.equal(job.ribbon, null);
-    assert.equal(job.sticker, "bakery");
-    for (const bit of job.items) {
-      assert.ok(bit.treat || bit.drink);
-      if (bit.treat) assert.ok(allowed.has(bit.treat));
+    if (job.kind === "custom") {
+      assert.equal(job.wish.sticker, true);
+      assert.ok(job.event);
+    } else {
+      assert.equal(job.ribbon, null);
+      assert.equal(job.sticker, "bakery");
+      for (const bit of job.items) {
+        assert.ok(bit.treat || bit.drink);
+        if (bit.treat) assert.ok(allowed.has(bit.treat));
+      }
     }
   }
 });
@@ -674,18 +685,16 @@ test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () 
   assert.equal(loaded.pantry.matcha, 4);
   assert.equal(loaded.bakerName, "Chris");
   assert.equal(loaded.mail.length, 3);
-  assert.ok(loaded.mail.every((job) => job.sticker === "bakery"));
+  assert.ok(loaded.mail.every((job) => job.kind === "custom" || job.sticker === "bakery"));
 });
 
 test("what's new shows once per version and keeps the bakery", () => {
-  assert.equal(GAME_VERSION, "1");
+  assert.equal(GAME_VERSION, "2");
   assert.equal(UPDATES[0].version, GAME_VERSION);
   assert.deepEqual(UPDATES[0].lines, [
-    "🍵 Matcha is here!",
-    "🥞 Fluffy Pancakes with syrup, butter, berries or marshmallows",
-    "🎀 Pick a ribbon color for your Orders boxes",
-    "🏷️ Your bakery sticker goes on every box",
+    "🎉 Custom Orders! Decorate cakes for parties!",
   ]);
+  assert.equal(UPDATES[1].version, "1");
   assert.equal(newGame().seenVersion, "");
   const store = memory();
   store.setItem(STORAGE_KEY, JSON.stringify({
@@ -720,4 +729,89 @@ test("what's new shows once per version and keeps the bakery", () => {
   store.setItem(STORAGE_KEY, JSON.stringify({ v: 1, coins: 12, seenVersion: 5 }));
   assert.equal(load(store).seenVersion, "");
   assert.equal(load(store).coins, 12);
+});
+
+test("custom party cakes pay more for a full match and stay kind", () => {
+  const fresh = newGame();
+  const seq = [0.9, 0, 0, 0, 0, 0];
+  let n = 0;
+  const rolled = rollMailJob(fresh, () => seq[n++] ?? 0);
+  assert.equal(rolled.kind, "custom");
+  assert.equal(rolled.event, "birthday");
+  assert.equal(rolled.wish.frosting, "plain");
+  assert.equal(rolled.wish.sticker, true);
+  assert.ok(["sprinkles", "marshmallow", "berries", "chocolate"].includes(rolled.wish.topping));
+  assert.ok(["pink", "red", "blue", "purple", "gold"].includes(rolled.wish.ribbon));
+
+  const wish = { frosting: "strawberry", topping: "sprinkles", ribbon: "gold", sticker: true };
+  const job = {
+    kind: "custom",
+    id: "party-test",
+    customer: "sunny",
+    event: "birthday",
+    wish,
+    made: { frosting: "strawberry", topping: "sprinkles", ribbon: "gold", sticker: true },
+    items: [{ treat: "cake", topping: "strawberry", drink: null, float: null }],
+    packed: 1,
+    closed: true,
+    ribbon: "gold",
+    sticker: "bakery",
+    plate: { treat: null, topping: null, drink: null, float: null, sips: [] },
+  };
+  const full = scoreCustom(job);
+  assert.equal(full.full, true);
+  assert.equal(full.matched, 4);
+  const partialJob = { ...job, made: { frosting: "chocolate", topping: "sprinkles", ribbon: null, sticker: false } };
+  const partial = scoreCustom(partialJob);
+  assert.equal(partial.full, false);
+  assert.equal(partial.matched, 1);
+  const none = scoreCustom({ ...job, made: { frosting: "chocolate", topping: "marshmallow", ribbon: "blue", sticker: false } });
+  assert.equal(none.matched, 0);
+  const purse = fresh;
+  assert.ok(customPay(purse, none) > 0);
+  assert.ok(customPay(purse, partial) > customPay(purse, none));
+  assert.ok(customPay(purse, full) > customPay(purse, partial));
+  for (const score of [none, partial, full]) {
+    const said = customNote(score);
+    assert.match(said, /glad|love|hoped/);
+    assert.doesNotMatch(said, /wrong|bad|miss|fail|nope|terrible/i);
+  }
+
+  let state = { ...fresh, coins: 40, season: { playedMs: 2500, earned: 4, limitMs: SEASON_PLAY_MS, bonusPaid: true, order: { treat: "cupcake", topping: "plain", qty: 1, customer: "sunny", vip: false }, plate: { treat: null, topping: null } }, mail: [job, rollMailJob(fresh, () => 0), rollMailJob(fresh, () => 0)] };
+  state = setCustomDecor({ ...state, mail: [{ ...job, packed: 0, closed: false, made: { frosting: null, topping: null, ribbon: null, sticker: false } }, state.mail[1], state.mail[2]] }, 0, { frosting: "strawberry" });
+  state = setCustomDecor(state, 0, { topping: "sprinkles" });
+  state = setCustomDecor(state, 0, { ribbon: "gold" });
+  state = setCustomDecor(state, 0, { sticker: "toggle" });
+  assert.equal(scoreCustom(state.mail[0]).full, true);
+  const packed = packCustom(state, 0);
+  assert.equal(packed.ok, true);
+  assert.equal(packed.state.pantry.flour, state.pantry.flour - 2);
+  assert.equal(packed.state.pantry.fruit, state.pantry.fruit - 1);
+  assert.equal(packed.state.pantry.sprinkles, state.pantry.sprinkles - 1);
+  state = closeMailBox(packed.state, 0);
+  const shipped = shipMail(state, 0, () => 0);
+  assert.equal(shipped.ok, true);
+  assert.equal(shipped.full, true);
+  assert.equal(shipped.pay, customPay(state, full));
+  assert.equal(shipped.state.coins, 40 + shipped.pay);
+  assert.equal(shipped.state.season.playedMs, 2500);
+  assert.equal(shipped.state.season.earned, 4);
+  assert.notEqual(shipped.state.mail[0].id, "party-test");
+  assert.match(shipped.note, /hoped/);
+
+  const kind = shipMail({ ...state, mail: [{ ...partialJob, packed: 1, closed: true }, state.mail[1], state.mail[2]] }, 0, () => 0);
+  assert.equal(kind.ok, true);
+  assert.equal(kind.full, false);
+  assert.ok(kind.pay > 0);
+  assert.match(kind.note, /glad/);
+
+  const store = memory();
+  store.setItem(STORAGE_KEY, JSON.stringify({ v: 1, coins: 55, level: 2, mail: [job] }));
+  const loaded = load(store);
+  assert.equal(loaded.coins, 55);
+  assert.equal(loaded.level, 2);
+  assert.equal(loaded.mail.length, 3);
+  assert.equal(loaded.mail[0].kind, "custom");
+  assert.equal(loaded.mail[0].wish.frosting, "strawberry");
+  assert.equal(loaded.mail[0].made.ribbon, "gold");
 });

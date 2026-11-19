@@ -565,6 +565,8 @@ h2, h3 { margin: 0; }
   border: 3px solid var(--line);
   display: block;
 }
+.custom-order { background: #fff7fb; }
+.party-mark { font-size: 2rem; line-height: 1; width: 64px; text-align: center; }
 .mail-list { display: flex; flex-direction: column; gap: 10px; }
 .mail-card {
   width: 100%;
