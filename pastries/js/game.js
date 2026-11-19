@@ -3,11 +3,13 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { INGREDIENTS, LOGOS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
+import { BOX_DECOR, INGREDIENTS, LOGOS, MUSIC_TRACKS, MUSIC_VOLUMES, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
 import {
   badgeName,
   buy,
+  closeMailBox,
   closeSeason,
+  describeMailItem,
   describeNeeds,
   describeOrder,
   drinkSteps,
@@ -16,17 +18,22 @@ import {
   getDrink,
   getTopping,
   getTreat,
+  mailItemReady,
   markLeave,
   missingIngredients,
   newGame,
   nextUnlockText,
+  normalizeMail,
   orderNeeds,
+  packMailItem,
   patienceMaxMs,
   rollOrder,
   seasonClock,
   seasonTimeUp,
   selectAwning,
+  setMailPlate,
   setPlate,
+  shipMail,
   startSeason,
   takeResolution,
   thanksLine,
@@ -37,6 +44,7 @@ import {
   unlockedTreats,
   withOrder,
   addPlaytime,
+  applyMailSip,
   applySip,
   SHOP,
   AWNINGS,
@@ -44,7 +52,7 @@ import {
 } from "./rules.js";
 import { createPlayer } from "./music.js";
 import { load, save } from "./state.js";
-import { bakerySvg, bookSvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, gearSvg, hintHandSvg, noteSvg, shopSvg, sipSvg, toppingSvg, treatSvg } from "./view.js";
+import { bakerySvg, bookSvg, boxSvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, gearSvg, hintHandSvg, mailBoxSvg, noteSvg, shopSvg, sipSvg, toppingSvg, treatSvg } from "./view.js";
 
 const IDLE_MS = 4500;
 const WALK_MS = 900;
@@ -85,6 +93,8 @@ function freshUi() {
     phase: "here",
     freshSip: "",
     homeHelp: new URLSearchParams(location.search).has("home"),
+    mailIndex: null,
+    shipBurst: null,
   };
 }
 
@@ -372,6 +382,10 @@ function onServe() {
 }
 
 function pickTreat(id) {
+  if (inMail()) {
+    pickMailTreat(id);
+    return;
+  }
   if (ui.busy || !state.season) return;
   const treat = getTreat(id);
   if (!treat) return;
@@ -399,6 +413,10 @@ function pickTreat(id) {
 }
 
 function pickTopping(id) {
+  if (inMail()) {
+    pickMailTopping(id);
+    return;
+  }
   if (ui.busy || !state.season) return;
   const plate = state.season.plate || { treat: null, topping: null };
   if (!plate.treat) {
@@ -429,6 +447,10 @@ function pickTopping(id) {
 }
 
 function onSip(id) {
+  if (inMail()) {
+    onMailSip(id);
+    return;
+  }
   if (ui.busy || !state.season?.order?.drink) return;
   const out = applySip(state, id);
   if (out.result === "hint") {
@@ -442,6 +464,153 @@ function onSip(id) {
   if (out.result === "made" && tutorialStep()?.waitFor === "sip") nextTutorial();
   save(state);
   render();
+}
+
+function mailJob() {
+  return state.mail?.[ui.mailIndex] || null;
+}
+
+function mailItem() {
+  const job = mailJob();
+  if (!job || job.packed >= job.items.length) return null;
+  return job.items[job.packed];
+}
+
+function pickMailTreat(id) {
+  const item = mailItem();
+  const job = mailJob();
+  if (!item?.treat || !job) return;
+  const treat = getTreat(id);
+  if (!treat) return;
+  if (treat.unlockLevel > state.level) {
+    toast(`${treat.name} unlocks at level ${treat.unlockLevel}. Keep baking!`);
+    return;
+  }
+  const plate = job.plate || {};
+  const turningOff = plate.treat === id;
+  const stillOk = plate.topping && toppingsFor(id, state.level).some((top) => top.id === plate.topping);
+  state = setMailPlate(state, ui.mailIndex, {
+    treat: turningOff ? null : id,
+    topping: turningOff ? null : (stillOk ? plate.topping : null),
+    drink: turningOff ? null : (plate.drink || null),
+    float: turningOff ? null : (plate.float || null),
+    sips: turningOff ? [] : (plate.sips || []),
+  });
+  save(state);
+  render();
+}
+
+function pickMailTopping(id) {
+  const item = mailItem();
+  const job = mailJob();
+  if (!item?.treat || !job) return;
+  const plate = job.plate || {};
+  if (!plate.treat) {
+    toast("Pick a treat first!");
+    return;
+  }
+  const allowed = toppingsFor(plate.treat, state.level);
+  if (!allowed.some((top) => top.id === id)) {
+    const top = getTopping(id);
+    if (top && top.unlockLevel > state.level) toast(`${top.name} unlocks at level ${top.unlockLevel}.`);
+    else toast("That topping goes on a different treat.");
+    return;
+  }
+  state = setMailPlate(state, ui.mailIndex, {
+    treat: plate.treat,
+    topping: plate.topping === id ? null : id,
+    drink: plate.drink || null,
+    float: plate.float || null,
+    sips: plate.sips || [],
+  });
+  save(state);
+  render();
+}
+
+function onMailSip(id) {
+  const item = mailItem();
+  if (!item?.drink) return;
+  const out = applyMailSip(state, ui.mailIndex, id);
+  if (out.result === "hint") {
+    toast(out.hint || "Try the next step!");
+    return;
+  }
+  if (out.result !== "ok" && out.result !== "made") return;
+  state = out.state;
+  ui.freshSip = id;
+  blip(out.result === "made" ? 660 : 520, 0.08);
+  save(state);
+  render();
+}
+
+function packCurrent() {
+  const out = packMailItem(state, ui.mailIndex);
+  if (!out.ok && out.reason === "short") {
+    const names = out.missing.map((item) => item.name.toLowerCase()).join(", ");
+    toast(`You need ${names}. The shop can help!`);
+    return;
+  }
+  if (!out.ok) {
+    toast("Finish this item first!");
+    return;
+  }
+  state = out.state;
+  blip(640, 0.08);
+  toast("In the box!");
+  save(state);
+  render();
+}
+
+function closeCurrentBox() {
+  const before = mailJob();
+  if (!before || before.packed < before.items.length) return;
+  state = closeMailBox(state, ui.mailIndex);
+  blip(520, 0.08);
+  save(state);
+  render();
+}
+
+function shipCurrent() {
+  const job = mailJob();
+  if (!job?.closed) return;
+  const who = getCustomer(job.customer).name;
+  const out = shipMail(state, ui.mailIndex);
+  if (!out.ok) return;
+  state = out.state;
+  ui.toast = "";
+  ui.shipBurst = { pay: out.pay, name: who, ribbon: job.ribbon, sticker: job.sticker };
+  save(state);
+  blip(660, 0.1);
+  setTimeout(() => blip(880, 0.12), 120);
+  render();
+  later(() => {
+    if (!ui.shipBurst) return;
+    ui.shipBurst = null;
+    ui.mailIndex = null;
+    render();
+  }, stillMotion() ? 700 : 1500);
+}
+
+function mailHint() {
+  if (ui.mailIndex == null) return { target: "open", text: "Tap an order." };
+  if (ui.shipBurst) return null;
+  const job = mailJob();
+  if (!job) return { target: "back", text: "Tap Back." };
+  if (job.closed) return { target: "ship", text: "Tap Ship!" };
+  if (job.packed >= job.items.length) return { target: "close", text: "Tap Close the box." };
+  const item = job.items[job.packed];
+  const plate = job.plate || {};
+  if (missingIngredients(state.pantry, totalNeeds(item.treat, item.topping, 1, item.drink, item.float)).length && mailItemReady(plate, item)) {
+    return { target: "shop", text: "Tap Shop to buy." };
+  }
+  if (item.treat && plate.treat !== item.treat) return { target: "treat", text: "Tap this treat." };
+  if (item.treat && plate.topping !== item.topping) return { target: "topping", text: "Tap this topping." };
+  if (item.drink && (plate.drink !== item.drink || (plate.float || null) !== (item.float || null))) {
+    const steps = drinkSteps(item.drink, item.float);
+    const next = steps[(plate.sips || []).length];
+    return { target: "sip", text: next?.hint || "Tap the next step!" };
+  }
+  return { target: "pack", text: "Tap Put in the box." };
 }
 
 function tutorialStep() {
@@ -493,6 +662,7 @@ function enterPlay(forceTutorial) {
 
 function activeHint() {
   if (!state.tutorialOn) return null;
+  if (ui.screen === "orders") return ui.idleHint;
   if (ui.tutorial) {
     const step = tutorialStep();
     if (!step) return null;
@@ -511,6 +681,7 @@ function idleHint() {
   if (ui.screen === "shop" || ui.screen === "recipes" || ui.screen === "help" || ui.screen === "settings") {
     return { target: "back", text: "Tap Back." };
   }
+  if (ui.screen === "orders") return mailHint();
   if (ui.screen === "play" && state.season && !ui.pause) {
     if (ui.timeUp) return { target: "claim", text: "Tap for your unlock!" };
     const order = state.season.order;
@@ -563,8 +734,9 @@ function placeHand() {
 }
 
 function openSub(screen) {
-  if (ui.screen === "play" || ui.screen === "home") ui.returnTo = ui.screen;
+  if (ui.screen === "play" || ui.screen === "home" || ui.screen === "orders") ui.returnTo = ui.screen;
   if (screen === "shop") ui.clockShop = ui.returnTo === "play" && !!state.season;
+  else ui.clockShop = false;
   ui.screen = screen;
   ui.pause = false;
   save(state);
@@ -572,9 +744,14 @@ function openSub(screen) {
 }
 
 function goBack() {
-  ui.screen = ui.returnTo === "play" && state.season ? "play" : "home";
-  if (ui.screen !== "shop") ui.clockShop = false;
+  ui.clockShop = false;
+  if (ui.returnTo === "orders") ui.screen = "orders";
+  else ui.screen = ui.returnTo === "play" && state.season ? "play" : "home";
   render();
+}
+
+function inMail() {
+  return ui.screen === "orders" && ui.mailIndex != null;
 }
 
 function handle(act, id) {
@@ -748,7 +925,28 @@ function handle(act, id) {
     openSub(act === "shop" ? "shop" : act);
     return;
   }
+  if (act === "orders") {
+    state = { ...state, mail: normalizeMail(state.mail, state) };
+    ui.mailIndex = null;
+    ui.shipBurst = null;
+    openSub("orders");
+    return;
+  }
+  if (act === "open-order") {
+    const index = Number(id);
+    if (!state.mail?.[index]) return;
+    ui.mailIndex = index;
+    ui.shipBurst = null;
+    render();
+    return;
+  }
   if (act === "back") {
+    if (ui.screen === "orders" && ui.mailIndex != null) {
+      ui.mailIndex = null;
+      ui.shipBurst = null;
+      render();
+      return;
+    }
     goBack();
     return;
   }
@@ -770,10 +968,29 @@ function handle(act, id) {
     onSip(id);
     return;
   }
+  if (act === "clear" && inMail()) {
+    const plate = mailJob()?.plate || {};
+    state = setMailPlate(state, ui.mailIndex, { treat: null, topping: null, drink: null, float: null, sips: [] });
+    if (plate.treat || plate.drink || (plate.sips || []).length) save(state);
+    render();
+    return;
+  }
   if (act === "clear" && state.season && !ui.busy) {
     state = setPlate(state, { treat: null, topping: null });
     save(state);
     render();
+    return;
+  }
+  if (act === "pack") {
+    packCurrent();
+    return;
+  }
+  if (act === "close-box") {
+    closeCurrentBox();
+    return;
+  }
+  if (act === "ship") {
+    shipCurrent();
     return;
   }
   if (act === "serve") {
@@ -847,7 +1064,7 @@ function textBtn(act, label, cls = "", id = "", hint = "") {
   const idAttr = id ? ` data-id="${esc(id)}"` : "";
   const hintAttr = hint ? ` data-hint="${esc(hint)}"` : "";
   const next = hint && activeHint()?.target === hint ? " is-next" : "";
-  const icons = { shop: shopSvg, recipes: bookSvg, settings: gearSvg, music: noteSvg };
+  const icons = { shop: shopSvg, recipes: bookSvg, settings: gearSvg, music: noteSvg, orders: boxSvg };
   const draw = icons[act];
   const inner = draw
     ? `<span class="btn-with-icon">${draw(22)}<span>${esc(label)}</span></span>`
@@ -911,6 +1128,146 @@ function pantryHtml() {
   }).join("")}</div>`;
 }
 
+function itemArt(item, size = 72) {
+  const treat = item?.treat ? treatSvg(item.treat, item.topping || "plain", size) : "";
+  const drink = item?.drink ? drinkSvg(item.drink, Math.round(size * 0.82), item.float) : "";
+  return `${treat}${drink}`;
+}
+
+function renderOrders() {
+  if (ui.shipBurst) {
+    return `<section class="screen sub" data-screen="orders" data-shipped="1">
+      <div class="ship-burst" role="status"><div class="ship-card">
+        ${mailBoxSvg({ packed: 0, closed: true, ribbon: ui.shipBurst.ribbon || BOX_DECOR.ribbon, sticker: ui.shipBurst.sticker || BOX_DECOR.sticker }, 160)}
+        <h2>Shipped!</h2>
+        <p>${esc(ui.shipBurst.name)} will be so happy.</p>
+        <p class="ship-pay">${money(ui.shipBurst.pay, 28)}</p>
+        <p class="fine">You now have ${money(state.coins)}</p>
+      </div></div>
+    </section>`;
+  }
+  const jobs = state.mail || [];
+  const note = `<p class="fine">No timer here. Make each item, tuck it in the box, close it, and tap Ship. The Selling Season clock waits.</p>`;
+  const meter = state.season ? seasonMeter() : "";
+  if (ui.mailIndex == null) {
+    const cards = jobs.map((job, index) => {
+      const who = getCustomer(job.customer);
+      const lines = job.items.map((item) => `<li>${esc(describeMailItem(item))}</li>`).join("");
+      const hint = index === 0 ? ' data-hint="open"' : "";
+      const next = index === 0 && activeHint()?.target === "open" ? " is-next" : "";
+      return `<button type="button" class="mail-card${next}" data-act="open-order" data-id="${index}"${hint}>
+        <span class="mail-who">${customerSvg(who, "neutral")}<span><b>${esc(who.name)}</b><small>${job.items.length} item${job.items.length === 1 ? "" : "s"}</small></span></span>
+        <ul class="mail-items">${lines}</ul>
+      </button>`;
+    }).join("");
+    return `<section class="screen sub" data-screen="orders">
+      <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>Orders</h2><span class="pill">${money(state.coins)}</span></header>
+      ${note}
+      ${meter}
+      <div class="mail-list">${cards}</div>
+    </section>`;
+  }
+  const job = jobs[ui.mailIndex];
+  if (!job) {
+    ui.mailIndex = null;
+    return renderOrders();
+  }
+  const who = getCustomer(job.customer);
+  const decor = {
+    packed: job.packed,
+    closed: job.closed,
+    ribbon: job.ribbon || BOX_DECOR.ribbon,
+    sticker: job.sticker || BOX_DECOR.sticker,
+  };
+  const lines = job.items.map((item, index) => {
+    const done = index < job.packed;
+    const now = !job.closed && index === job.packed;
+    const mark = done ? "In the box" : now ? "Make this" : "Next";
+    return `<li class="${done ? "is-done" : ""} ${now ? "is-now" : ""}"><b>${mark}.</b> ${esc(describeMailItem(item))}</li>`;
+  }).join("");
+  const item = !job.closed && job.packed < job.items.length ? job.items[job.packed] : null;
+  const plate = job.plate || {};
+  const hint = activeHint();
+  let making = "";
+  if (item) {
+    const treats = item.treat ? TREATS.map((treat) => {
+      const locked = treat.unlockLevel > state.level;
+      const on = plate.treat === treat.id;
+      const guide = treat.id === item.treat;
+      const next = guide && hint?.target === "treat" ? " is-next" : "";
+      return `<button type="button" class="choice ${on ? "is-on" : ""} ${locked ? "is-locked" : ""}${next}" data-act="pick-treat" data-id="${treat.id}" ${guide ? 'data-hint="treat"' : ""} aria-pressed="${on}">
+        ${treatSvg(treat.id, "plain", 52)}
+        <span class="name">${esc(treat.name)}</span>
+        ${locked ? `<em>Lv ${treat.unlockLevel}</em>` : ""}
+      </button>`;
+    }).join("") : "";
+    const toppingSource = item.treat
+      ? (plate.treat ? toppingsFor(plate.treat, state.level) : TOPPINGS.filter((top) => top.unlockLevel <= state.level))
+      : [];
+    const toppings = toppingSource.map((top) => {
+      const on = plate.topping === top.id;
+      const guide = top.id === item.topping;
+      const next = guide && hint?.target === "topping" ? " is-next" : "";
+      return `<button type="button" class="choice ${on ? "is-on" : ""}${next}" data-act="pick-topping" data-id="${top.id}" ${guide ? 'data-hint="topping"' : ""} aria-pressed="${on}">
+        ${toppingSvg(top.id, 48)}
+        <span class="name">${esc(top.name)}</span>
+      </button>`;
+    }).join("");
+    const steps = item.drink ? drinkSteps(item.drink, item.float) : [];
+    const doneSips = plate.sips || [];
+    const nextSip = steps[doneSips.length];
+    const sipButtons = steps.map((step, index) => {
+      const done = index < doneSips.length;
+      const current = step.id === nextSip?.id;
+      const fresh = ui.freshSip === step.id ? " is-fresh" : "";
+      return `<button type="button" class="btn sip-step ${done ? "is-done" : ""}${current && hint?.target === "sip" ? " is-next" : ""}${fresh}" data-act="sip" data-id="${step.id}" ${current ? 'data-hint="sip"' : ""} aria-pressed="${done}">
+        ${sipSvg(step.id, 56)}
+        <span class="name">${esc(step.name)}</span>
+      </button>`;
+    }).join("");
+    const ready = mailItemReady(plate, item);
+    const needs = totalNeeds(item.treat, item.topping, 1, item.drink, item.float);
+    const missing = ready ? missingIngredients(state.pantry, needs) : [];
+    const needNote = missing.length
+      ? `Need ${missing.map((bit) => `${bit.short} ${bit.name.toLowerCase()}`).join(", ")}`
+      : (ready ? "Ready for the box" : "Match the order");
+    making = `
+      <div class="order-art mail-now ${item.drink ? "has-drink" : ""}">${itemArt(item, 88)}</div>
+      <div class="plate-row">
+        <div class="plate">
+          ${plate.treat ? treatSvg(plate.treat, plate.topping || "plain", 78) : emptyPlateSvg(78)}
+          ${plate.drink ? `<span class="sip">${drinkSvg(plate.drink, 56, plate.float)}</span>` : ""}
+        </div>
+        <div>
+          <strong>${plate.treat ? esc(getTreat(plate.treat).name) : (item.treat ? "Your tray" : "The drink")}</strong>
+          ${item.treat ? `<span>${plate.topping ? esc(getTopping(plate.topping).name) : "No topping yet"}</span>` : ""}
+          ${plate.drink ? `<span>${esc(getDrink(plate.drink).name)}</span>` : ""}
+          <span class="${missing.length ? "need" : ""}">${esc(needNote)}</span>
+        </div>
+      </div>
+      ${treats ? `<div class="scroller" data-scroller="treats">${treats}</div>` : ""}
+      ${toppings ? `<div class="scroller" data-scroller="toppings">${toppings}</div>` : ""}
+      ${steps.length ? `<p class="row-label">Make the ${esc(getDrink(item.drink)?.name || "drink")}</p><div class="sip-row" data-scroller="sips">${sipButtons}</div>` : ""}
+      <div class="serve-row">
+        ${textBtn("pack", "Put in the box", ready ? "btn-go" : "btn-ghost", "", "pack")}
+        ${textBtn("clear", "Clear", "btn-ghost")}
+        ${textBtn("shop", "Shop", "btn-ghost", "", "shop")}
+      </div>`;
+  }
+  const close = !item && !job.closed ? textBtn("close-box", "Close the box", "btn-go", "", "close") : "";
+  const ship = job.closed ? textBtn("ship", "Ship", "btn-go", "", "ship") : "";
+  return `<section class="screen sub" data-screen="orders" data-mail="${ui.mailIndex}">
+    <header class="topbar">${textBtn("back", "Back", "", "", "back")}<h2>${esc(who.name)}</h2><span class="pill">${money(state.coins)}</span></header>
+    ${note}
+    ${meter}
+    <div class="mail-box-wrap" data-closed="${job.closed ? "1" : "0"}" data-packed="${job.packed}">${mailBoxSvg(decor, 150)}</div>
+    <ul class="mail-lines">${lines}</ul>
+    ${making}
+    ${close}
+    ${ship}
+  </section>`;
+}
+
 function renderHome() {
   const timeUp = seasonTimeUp(state.season);
   const inSeason = !!state.season && !timeUp;
@@ -951,6 +1308,7 @@ function renderHome() {
     <div class="btn-row">
       ${textBtn("shop", "Shop")}
       ${textBtn("recipes", "Recipes")}
+      ${textBtn("orders", "Orders")}
     </div>
     <div class="btn-row">
       ${textBtn("howto", "How to play")}
@@ -1024,6 +1382,7 @@ function renderPlay() {
       <p>The season clock is paused. Your minutes stay saved.</p>
       ${textBtn("resume", "Keep baking", "btn-go")}
       ${textBtn("shop", "Shop")}
+      ${textBtn("orders", "Orders")}
       ${textBtn("recipes", "Recipes")}
       ${textBtn("howto", "How to play")}
       ${textBtn("settings", "Settings")}
@@ -1206,6 +1565,7 @@ function renderHelp() {
       <li><b>3.</b> A happy customer pays ${coinSvg(22)} Ingredients stay if the order is wrong.</li>
       <li><b>4.</b> A Selling Season is ${esc(formatDuration(SEASON_PLAY_MS))} of baking and shopping. Leave whenever you want. The minutes are saved, and they add up.</li>
       <li><b>5.</b> When the season timer fills, you unlock something new. The bakery never closes.</li>
+      <li><b>6.</b> Orders are calm mail requests. There is no timer. Make each item, put it in the box, close it, and tap Ship. The Selling Season clock waits while Orders is open.</li>
     </ol>
     ${textBtn("howto", "Show me how", "btn-go")}
     <p class="fine">On an iPhone or iPad, tap Share, then Add to Home Screen.</p>
@@ -1244,6 +1604,7 @@ function render() {
     lefts[el.dataset.scroller] = el.scrollLeft;
   });
   const screen = state.season && ui.screen === "play" ? renderPlay()
+    : ui.screen === "orders" ? renderOrders()
     : ui.screen === "shop" ? renderShop()
     : ui.screen === "recipes" ? renderRecipes()
     : ui.screen === "settings" ? renderSettings()
@@ -1328,6 +1689,9 @@ window.addEventListener("focus", wakeMusic);
 window.addEventListener("pagehide", () => save(state));
 
 state = load();
+if (!Array.isArray(state.mail) || state.mail.length !== 3) {
+  state = { ...state, mail: normalizeMail(state.mail, state) };
+}
 applyTabIcon(state.logo);
 ui.timeUp = seasonTimeUp(state.season);
 ui.lastInput = performance.now();

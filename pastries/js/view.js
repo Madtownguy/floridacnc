@@ -451,6 +451,36 @@ export function noteSvg(size = 22) {
   </svg>`;
 }
 
+export function boxSvg(size = 22) {
+  return `<svg class="btn-mark" viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true">
+    <path d="M5 12 L16 7 L27 12 L16 17 Z" fill="#ffd6e7" stroke="#5c3a32" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M5 12 V23 L16 28 V17 Z" fill="#fff6ee" stroke="#5c3a32" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M27 12 V23 L16 28 V17 Z" fill="#ffe9a3" stroke="#5c3a32" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M16 17 V28" stroke="#5c3a32" stroke-width="1.5"/>
+  </svg>`;
+}
+
+export function mailBoxSvg({ packed = 0, closed = false, ribbon = null, sticker = null } = {}, size = 150) {
+  const treats = Array.from({ length: Math.min(packed, 3) }, (_, i) => {
+    const x = 48 + i * 22;
+    return `<circle cx="${x}" cy="78" r="8" fill="${["#ff8fb8", "#ffe08a", "#9fd4ff"][i]}" stroke="#5c3a32" stroke-width="2"/>`;
+  }).join("");
+  const bow = ribbon ? `<path d="M70 46 C56 34 48 48 70 58 C92 48 84 34 70 46 Z" fill="#ff8fb8" stroke="#5c3a32" stroke-width="2"/>` : "";
+  const seal = sticker ? `<circle cx="104" cy="88" r="10" fill="#c9b6ff" stroke="#5c3a32" stroke-width="2"/>` : "";
+  const lid = closed
+    ? `<path d="M28 70 L70 48 L112 70 L70 92 Z" fill="#ffd6e7" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round"/>`
+    : `<path d="M22 58 L70 34 L118 58 L70 78 Z" fill="#ffe9a3" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round"/>`;
+  const inner = `
+    <path d="M28 72 L70 92 L70 128 L28 108 Z" fill="#fff6ee" stroke="#5c3a32" stroke-width="3"/>
+    <path d="M112 72 L70 92 L70 128 L112 108 Z" fill="#ffe9c4" stroke="#5c3a32" stroke-width="3"/>
+    ${closed ? "" : treats}
+    ${lid}
+    ${bow}
+    ${seal}
+  `;
+  return wrap(inner, size, "0 0 140 140");
+}
+
 export function hintHandSvg() {
   return `<svg class="hint-pointer" viewBox="0 0 70 88" width="64" height="80" aria-hidden="true">
     <g fill="#f6c7a4" fill-opacity="0.78" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round">

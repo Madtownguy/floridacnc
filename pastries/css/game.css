@@ -539,6 +539,57 @@ h2, h3 { margin: 0; }
   box-shadow: var(--shadow);
 }
 
+.mail-list { display: flex; flex-direction: column; gap: 10px; }
+.mail-card {
+  width: 100%;
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  padding: 10px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+@media (min-width: 700px) {
+  .mail-card { flex-direction: row; align-items: center; gap: 16px; }
+  .mail-items { margin: 0; }
+}
+.mail-who { display: flex; align-items: center; gap: 8px; }
+.mail-who svg { width: 64px; height: 64px; }
+.mail-who small { display: block; color: var(--soft); font-weight: 700; }
+.mail-items, .mail-lines { margin: 0; padding-left: 18px; }
+.mail-lines li { margin: 4px 0; font-weight: 700; }
+.mail-lines .is-done { color: var(--soft); }
+.mail-box-wrap { display: flex; justify-content: center; }
+.mail-now { display: flex; justify-content: center; gap: 8px; align-items: flex-end; margin: 4px 0 8px; }
+.ship-burst {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff6ee;
+  text-align: center;
+  padding: 16px;
+}
+.ship-card {
+  width: min(360px, 100%);
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: 24px;
+  padding: 12px 14px 16px;
+  box-shadow: var(--shadow);
+  animation: ship-pop 0.45s ease;
+}
+.ship-card h2 { font-size: 2rem; color: var(--pink-deep); margin: 4px 0; }
+.ship-pay { font-size: 1.4rem; }
+@keyframes ship-pop {
+  from { transform: scale(0.82); }
+  to { transform: scale(1); }
+}
+
 @media (max-width: 520px) and (orientation: portrait) {
   .dock { max-height: 64%; }
   .choice { width: 84px; min-height: 80px; }

@@ -175,6 +175,12 @@ export const LOGOS = [
   { kind: "drink", id: "chocolate-milk", name: "Chocolate Milk" },
 ];
 
+/** Box decorations. Leave these null until ribbons or stickers are added.
+ *  A saved mail job can also set ribbon or sticker to a short id.
+ *  The box draws a bow or a sticker only when one of those is set.
+ */
+export const BOX_DECOR = { ribbon: null, sticker: null };
+
 /** About one customer in three also asks for a drink, after the first lesson. */
 export const DRINK_ORDER_CHANCE = 0.3;
 

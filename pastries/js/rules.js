@@ -57,6 +57,7 @@ export function newGame() {
     decor: {},
     stats: { customers: 0, baked: 0, seasons: 0, best: 0 },
     season: null,
+    mail: [],
   };
 }
 
@@ -134,6 +135,7 @@ export function normalize(data) {
     bakerName: cleanBakerName(data.bakerName),
     tutorialDone: !!data.tutorialDone,
     logo: validLogo(data.logo),
+    mail: normalizeMail(data.mail, { level: clampInt(data.level, 1, 9999, 1) }),
     pantry: { ...base.pantry, ...(data.pantry || {}) },
     upgrades: { ...base.upgrades, ...(data.upgrades || {}) },
     decor: { ...(data.decor || {}) },
@@ -504,6 +506,226 @@ export function rollOrder(state, rng = Math.random) {
   }
   const float = drink === "hot-chocolate" && rng() < COCOA_MARSHMALLOW_CHANCE ? "marshmallow" : null;
   return { treat: treat.id, topping: topping.id, qty, customer: customer.id, vip, drink, float };
+}
+
+function blankMailPlate() {
+  return { treat: null, topping: null, drink: null, float: null, sips: [] };
+}
+
+function rollMailItem(state, rng) {
+  const treats = unlockedTreats(state.level);
+  const drinks = unlockedDrinks(state.level);
+  const roll = rng();
+  let treat = null;
+  let topping = null;
+  let drink = null;
+  let float = null;
+  const wantTreat = treats.length && (roll < 0.78 || !drinks.length);
+  const wantDrink = drinks.length && (roll > 0.42 || !wantTreat);
+  if (wantTreat) {
+    const picked = pick(treats, rng);
+    const tops = toppingsFor(picked.id, state.level);
+    treat = picked.id;
+    topping = (tops.length ? pick(tops, rng) : getTopping("plain")).id;
+  }
+  if (wantDrink) {
+    drink = pick(drinks, rng).id;
+    if (drink === "hot-chocolate" && rng() < 0.45) float = "marshmallow";
+  }
+  return { treat, topping, drink, float };
+}
+
+export function rollMailJob(state, rng = Math.random) {
+  const count = 1 + Math.min(2, Math.floor(rng() * 3));
+  const people = unlockedCustomers(state.level);
+  const customer = pick(people, rng).id;
+  const items = [];
+  for (let i = 0; i < count; i += 1) items.push(rollMailItem(state, rng));
+  return {
+    id: `mail-${customer}-${items.length}-${Math.floor(rng() * 100000)}`,
+    customer,
+    items,
+    packed: 0,
+    closed: false,
+    ribbon: null,
+    sticker: null,
+    plate: blankMailPlate(),
+  };
+}
+
+function cleanMailItem(item, level) {
+  if (!item || typeof item !== "object") return null;
+  const treat = getTreat(item.treat);
+  const topping = getTopping(item.topping);
+  const drink = getDrink(item.drink);
+  const treatOk = !!(treat && treat.unlockLevel <= level && topping && topping.unlockLevel <= level);
+  const drinkOk = !!(drink && drink.unlockLevel <= level);
+  if (item.treat && !treatOk) return null;
+  if (item.drink && !drinkOk) return null;
+  if (!treatOk && !drinkOk) return null;
+  return {
+    treat: treatOk ? treat.id : null,
+    topping: treatOk ? topping.id : null,
+    drink: drinkOk ? drink.id : null,
+    float: drinkOk && drink.id === "hot-chocolate" && item.float === "marshmallow" ? "marshmallow" : null,
+  };
+}
+
+function cleanMailJob(job, state, rng) {
+  if (!job || typeof job !== "object") return rollMailJob(state, rng);
+  const items = (Array.isArray(job.items) ? job.items : []).map((item) => cleanMailItem(item, state.level)).filter(Boolean).slice(0, 3);
+  if (!items.length) return rollMailJob(state, rng);
+  const packed = Math.max(0, Math.min(items.length, Math.round(Number(job.packed) || 0)));
+  const drink = items[packed]?.drink;
+  const float = items[packed]?.float;
+  const steps = drink ? drinkSteps(drink, float).map((step) => step.id) : [];
+  const rawSips = Array.isArray(job.plate?.sips) ? job.plate.sips : [];
+  const sips = [];
+  for (let i = 0; i < steps.length; i += 1) {
+    if (rawSips[i] === steps[i]) sips.push(steps[i]);
+    else break;
+  }
+  const person = getCustomer(job.customer);
+  const customer = person.unlockLevel <= state.level ? person.id : unlockedCustomers(state.level)[0].id;
+  return {
+    id: typeof job.id === "string" && job.id ? job.id : `mail-kept-${packed}`,
+    customer,
+    items,
+    packed,
+    closed: !!job.closed && packed === items.length,
+    ribbon: typeof job.ribbon === "string" ? job.ribbon : null,
+    sticker: typeof job.sticker === "string" ? job.sticker : null,
+    plate: {
+      treat: getTreat(job.plate?.treat) ? job.plate.treat : null,
+      topping: getTopping(job.plate?.topping) ? job.plate.topping : null,
+      drink: sips.length && sips.length === steps.length ? drink : null,
+      float: sips.length && sips.length === steps.length ? (float || null) : null,
+      sips,
+    },
+  };
+}
+
+export function normalizeMail(raw, state, rng = Math.random) {
+  const jobs = Array.isArray(raw) ? raw : [];
+  const next = jobs.slice(0, 3).map((job) => cleanMailJob(job, state, rng));
+  while (next.length < 3) next.push(rollMailJob(state, rng));
+  return next;
+}
+
+export function describeMailItem(item) {
+  const bits = [];
+  if (item?.treat) {
+    const said = describeOrder({ treat: item.treat, topping: item.topping || "plain", qty: 1 });
+    bits.push(said.line.replace(/, please!$/, ""));
+  }
+  if (item?.drink) {
+    if (item.drink === "hot-chocolate" && item.float === "marshmallow") bits.push("hot chocolate with marshmallows");
+    else bits.push(getDrink(item.drink)?.with || "a drink");
+  }
+  return bits.join(" and ") || "A treat";
+}
+
+export function mailItemReady(plate, item) {
+  const current = plate || {};
+  if (!item || (!item.treat && !item.drink)) return false;
+  if (item.treat && (current.treat !== item.treat || current.topping !== item.topping)) return false;
+  if (item.drink && (current.drink !== item.drink || (current.float || null) !== (item.float || null))) return false;
+  return true;
+}
+
+export function mailPay(state, item) {
+  if (item?.treat) {
+    return payout(state, {
+      treat: item.treat,
+      topping: item.topping || "plain",
+      qty: 1,
+      customer: "sunny",
+      vip: false,
+      drink: item.drink,
+      float: item.float,
+    });
+  }
+  const drink = getDrink(item?.drink);
+  let coins = drink ? drink.price : 0;
+  if (item?.float === "marshmallow") coins += getTopping("marshmallow")?.priceAdd || 0;
+  if (state.upgrades?.tipJar) coins += 2;
+  return coins;
+}
+
+export function packMailItem(state, index) {
+  const jobs = state.mail || [];
+  const job = jobs[index];
+  const item = job?.items?.[job.packed];
+  if (!job || !item || job.closed) return { state, ok: false, reason: "done" };
+  if (!mailItemReady(job.plate, item)) return { state, ok: false, reason: "incomplete" };
+  const needs = totalNeeds(item.treat, item.topping, 1, item.drink, item.float);
+  const missing = missingIngredients(state.pantry, needs);
+  if (missing.length) return { state, ok: false, reason: "short", missing };
+  const mail = jobs.slice();
+  mail[index] = { ...job, packed: job.packed + 1, plate: blankMailPlate() };
+  return { state: { ...state, pantry: subtractPantry(state.pantry, needs), mail }, ok: true };
+}
+
+export function closeMailBox(state, index) {
+  const job = state.mail?.[index];
+  if (!job || job.packed < job.items.length) return state;
+  const mail = state.mail.slice();
+  mail[index] = { ...job, closed: true };
+  return { ...state, mail };
+}
+
+export function shipMail(state, index, rng = Math.random) {
+  const job = state.mail?.[index];
+  if (!job?.closed) return { state, ok: false, pay: 0 };
+  const pay = job.items.reduce((sum, item) => sum + mailPay(state, item), 0);
+  const mail = state.mail.slice();
+  mail[index] = rollMailJob(state, rng);
+  return {
+    state: { ...state, coins: state.coins + pay, mail },
+    ok: true,
+    pay,
+  };
+}
+
+export function setMailPlate(state, index, plate) {
+  const job = state.mail?.[index];
+  if (!job || job.closed || job.packed >= job.items.length) return state;
+  const mail = state.mail.slice();
+  mail[index] = {
+    ...job,
+    plate: {
+      treat: plate?.treat || null,
+      topping: plate?.topping || null,
+      drink: plate?.drink || null,
+      float: plate?.float === "marshmallow" ? "marshmallow" : null,
+      sips: Array.isArray(plate?.sips) ? plate.sips.filter((id) => typeof id === "string") : [],
+    },
+  };
+  return { ...state, mail };
+}
+
+export function applyMailSip(state, index, stepId) {
+  const job = state.mail?.[index];
+  const item = job?.items?.[job.packed];
+  if (!job || !item?.drink || job.closed) return { state, result: "none", hint: "" };
+  const steps = drinkSteps(item.drink, item.float);
+  const sips = job.plate?.sips || [];
+  if (sips.length >= steps.length) return { state, result: "done", hint: "" };
+  const next = steps[sips.length];
+  if (stepId !== next.id) return { state, result: "hint", hint: next.hint, next: next.id };
+  const nextSips = [...sips, stepId];
+  const made = nextSips.length === steps.length;
+  return {
+    state: setMailPlate(state, index, {
+      treat: job.plate?.treat || null,
+      topping: job.plate?.topping || null,
+      drink: made ? item.drink : null,
+      float: made && item.float === "marshmallow" ? "marshmallow" : null,
+      sips: nextSips,
+    }),
+    result: made ? "made" : "ok",
+    hint: next.hint,
+  };
 }
 
 export function startSeason(state, rng = Math.random) {
