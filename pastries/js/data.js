@@ -42,9 +42,15 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * with that same version. The card lists that entry's lines once,
  * the first time the game opens after the version changes.
  */
-export const GAME_VERSION = "1";
+export const GAME_VERSION = "2";
 
 export const UPDATES = [
+  {
+    version: "2",
+    lines: [
+      "🎉 Custom Orders! Decorate cakes for parties!",
+    ],
+  },
   {
     version: "1",
     lines: [
@@ -234,6 +240,16 @@ export const RIBBONS = [
   { id: "purple", name: "Purple", color: "#a78bfa" },
   { id: "gold", name: "Gold", color: "#e8b931" },
 ];
+
+/** Party cakes in Orders. Decorations are toppings and ribbons already in the game. */
+export const PARTY_EVENTS = [
+  { id: "birthday", name: "Birthday" },
+  { id: "graduation", name: "Graduation" },
+  { id: "holiday", name: "Holiday" },
+];
+
+export const PARTY_FROSTING = ["plain", "strawberry", "chocolate", "caramel", "blueberry", "lemon", "honey"];
+export const PARTY_TOPPINGS = ["sprinkles", "marshmallow", "berries", "chocolate", "coconut", "cream"];
 
 /** About one customer in three also asks for a drink, after the first lesson. */
 export const DRINK_ORDER_CHANCE = 0.3;
