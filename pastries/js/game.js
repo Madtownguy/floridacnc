@@ -3,7 +3,7 @@
  * Screens: home, play, shop, recipes, help, results.
  * The Selling Season clock lives in rules.js and reads SEASON_PLAY_MS.
  */
-import { BOX_DECOR, INGREDIENTS, LOGOS, MUSIC_TRACKS, MUSIC_VOLUMES, RIBBONS, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, bakeryStickerText, cleanBakerName, BAKER_NAME_LIMIT } from "./data.js";
+import { BOX_DECOR, GAME_VERSION, INGREDIENTS, LOGOS, MUSIC_TRACKS, MUSIC_VOLUMES, RIBBONS, SEASON_PLAY_MS, SEASON_START_BONUS, TREATS, DRINKS, TUTORIAL_STEPS, bakeryStickerText, cleanBakerName, currentUpdate, BAKER_NAME_LIMIT } from "./data.js";
 import {
   badgeName,
   buy,
@@ -97,6 +97,7 @@ function freshUi() {
     homeHelp: new URLSearchParams(location.search).has("home"),
     mailIndex: null,
     shipBurst: null,
+    whatsNew: false,
   };
 }
 
@@ -140,7 +141,7 @@ function blip(freq, dur) {
 
 function clockRunning() {
   if (!state.season || seasonTimeUp(state.season)) return false;
-  if (document.hidden || ui.pause) return false;
+  if (document.hidden || ui.pause || showWhatsNew()) return false;
   if (ui.screen === "play") return true;
   return ui.screen === "shop" && ui.clockShop;
 }
@@ -159,14 +160,14 @@ function frame(now) {
     }
     if (step.justFinished) onSeasonTimeUp();
   }
-  if (ui.screen === "play" && state.season && !ui.pause && !ui.busy && ui.phase === "here" && !document.hidden) {
+  if (ui.screen === "play" && state.season && !ui.pause && !ui.busy && !showWhatsNew() && ui.phase === "here" && !document.hidden) {
     ui.patienceMs -= dt;
     if (ui.patienceMs <= 0) {
       ui.patienceMs = 0;
       onLeave();
     }
   }
-  if (state.tutorialOn && !ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !document.hidden) {
+  if (state.tutorialOn && !ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !showWhatsNew() && !document.hidden) {
     if (ui.lastInput && now - ui.lastInput > IDLE_MS) {
       const hint = idleHint();
       if (hint) {
@@ -673,7 +674,13 @@ function enterPlay(forceTutorial) {
   return true;
 }
 
+function showWhatsNew() {
+  if (!ui.whatsNew || ui.tutorial || ui.homeHelp || !currentUpdate()) return false;
+  return true;
+}
+
 function activeHint() {
+  if (showWhatsNew()) return null;
   if (!state.tutorialOn) return null;
   if (ui.screen === "orders") return ui.idleHint;
   if (ui.tutorial) {
@@ -858,6 +865,13 @@ function handle(act, id) {
     const clean = new URL(location.href);
     clean.searchParams.delete("home");
     history.replaceState(null, "", clean.pathname + clean.search + clean.hash);
+    render();
+    return;
+  }
+  if (act === "whats-new-close") {
+    state = { ...state, seenVersion: GAME_VERSION };
+    ui.whatsNew = false;
+    save(state);
     render();
     return;
   }
@@ -1073,6 +1087,7 @@ function handle(act, id) {
     player.stop();
     state = newGame();
     ui = freshUi();
+    ui.whatsNew = true;
     ui.lastInput = performance.now();
     save(state);
     render();
@@ -1624,6 +1639,20 @@ function renderResults() {
   </section>`;
 }
 
+function whatsNewCard() {
+  const update = currentUpdate();
+  if (!showWhatsNew() || !update) return "";
+  const lines = update.lines.map((line) => `<li>${esc(line)}</li>`).join("");
+  return `<div class="overlay whats-new" role="dialog" aria-label="What's New">
+    <div class="sheet">
+      <p class="tag">A new bake</p>
+      <h2>What's New!</h2>
+      <ul class="whats-lines">${lines}</ul>
+      ${textBtn("whats-new-close", "Yay, let's bake!", "btn-go")}
+    </div>
+  </div>`;
+}
+
 function render() {
   if (tutorialStep()?.waitFor === "sip" && state.season?.order?.drink && state.season.plate?.drink === state.season.order.drink) {
     nextTutorial();
@@ -1652,7 +1681,7 @@ function render() {
       <p>3. Tap Add to Home Screen.</p>
       ${textBtn("home-help-done", "OK", "btn-go")}
     </div></div>` : "";
-  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml + homeHelp;
+  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml + homeHelp + whatsNewCard();
   const next = document.querySelector(".screen");
   if (next && next.dataset.screen === prevName) next.scrollTop = top;
   document.querySelectorAll("[data-scroller]").forEach((el) => {
@@ -1726,6 +1755,7 @@ if (!Array.isArray(state.mail) || state.mail.length !== 3) {
 }
 applyTabIcon(state.logo);
 ui.timeUp = seasonTimeUp(state.season);
+ui.whatsNew = state.seenVersion !== GAME_VERSION;
 ui.lastInput = performance.now();
 player.setMuted(state.musicMuted);
 player.setVolume(state.musicVolume || "medium");

@@ -60,6 +60,7 @@ export function newGame() {
     stats: { customers: 0, baked: 0, seasons: 0, best: 0 },
     season: null,
     mail: [],
+    seenVersion: "",
   };
 }
 
@@ -138,6 +139,7 @@ export function normalize(data) {
     bakerName: cleanBakerName(data.bakerName),
     tutorialDone: !!data.tutorialDone,
     logo: validLogo(data.logo),
+    seenVersion: cleanSeenVersion(data.seenVersion),
     mail: normalizeMail(data.mail, { level: clampInt(data.level, 1, 9999, 1) }),
     pantry: { ...base.pantry, ...(data.pantry || {}) },
     upgrades: { ...base.upgrades, ...(data.upgrades || {}) },
@@ -145,6 +147,11 @@ export function normalize(data) {
     stats: { ...base.stats, ...(data.stats || {}) },
     season,
   };
+}
+
+function cleanSeenVersion(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.length > 0 && text.length <= 40 ? text : "";
 }
 
 function validLogo(logo) {
