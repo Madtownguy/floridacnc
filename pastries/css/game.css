@@ -458,7 +458,10 @@ h2, h3 { margin: 0; }
 .home-help svg { width: 88px; height: 88px; }
 .whats-new { z-index: 14; align-items: center; }
 .whats-new .sheet { text-align: center; }
-.whats-new h2 { color: var(--pink-deep); font-size: 2rem; margin: 4px 0 8px; }
+.whats-new h2, .season-name h2 { color: var(--pink-deep); font-size: 2rem; margin: 4px 0 8px; }
+.season-name { z-index: 13; align-items: center; }
+.season-name .sheet { text-align: center; }
+.season-name .name-field { margin-bottom: 8px; text-align: center; }
 .whats-lines { list-style: none; padding: 0; margin: 8px 0 12px; }
 .whats-lines li {
   background: #fff6ee;
