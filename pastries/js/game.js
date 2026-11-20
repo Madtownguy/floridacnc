@@ -101,6 +101,8 @@ function freshUi() {
     mailIndex: null,
     shipBurst: null,
     whatsNew: false,
+    seasonName: false,
+    pendingTutorial: false,
   };
 }
 
@@ -144,7 +146,7 @@ function blip(freq, dur) {
 
 function clockRunning() {
   if (!state.season || seasonTimeUp(state.season)) return false;
-  if (document.hidden || ui.pause || showWhatsNew()) return false;
+  if (document.hidden || ui.pause || showWhatsNew() || ui.seasonName) return false;
   if (ui.screen === "play") return true;
   return ui.screen === "shop" && ui.clockShop;
 }
@@ -163,14 +165,14 @@ function frame(now) {
     }
     if (step.justFinished) onSeasonTimeUp();
   }
-  if (ui.screen === "play" && state.season && !ui.pause && !ui.busy && !showWhatsNew() && ui.phase === "here" && !document.hidden) {
+  if (ui.screen === "play" && state.season && !ui.pause && !ui.busy && !showWhatsNew() && !ui.seasonName && ui.phase === "here" && !document.hidden) {
     ui.patienceMs -= dt;
     if (ui.patienceMs <= 0) {
       ui.patienceMs = 0;
       onLeave();
     }
   }
-  if (state.tutorialOn && !ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !showWhatsNew() && !document.hidden) {
+  if (state.tutorialOn && !ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !showWhatsNew() && !ui.seasonName && !document.hidden) {
     if (ui.lastInput && now - ui.lastInput > IDLE_MS) {
       const hint = idleHint();
       if (hint) {
@@ -671,6 +673,16 @@ function maybeAdvance(waitFor) {
 
 function enterPlay(forceTutorial) {
   if (seasonTimeUp(state.season)) return false;
+  if (!state.season) {
+    ui.seasonName = true;
+    ui.pendingTutorial = !!forceTutorial;
+    render();
+    return true;
+  }
+  return openSeasonPlay(forceTutorial);
+}
+
+function openSeasonPlay(forceTutorial) {
   let freshSeason = false;
   if (!state.season) {
     state = startSeason(state, Math.random);
@@ -692,13 +704,24 @@ function enterPlay(forceTutorial) {
   return true;
 }
 
+function finishSeasonName(saveName) {
+  if (saveName) {
+    const input = document.querySelector("#season-name");
+    state = { ...state, bakerName: cleanBakerName(input ? input.value : state.bakerName) };
+  }
+  const force = !!ui.pendingTutorial;
+  ui.seasonName = false;
+  ui.pendingTutorial = false;
+  openSeasonPlay(force);
+}
+
 function showWhatsNew() {
   if (!ui.whatsNew || ui.tutorial || ui.homeHelp || !currentUpdate()) return false;
   return true;
 }
 
 function activeHint() {
-  if (showWhatsNew()) return null;
+  if (showWhatsNew() || ui.seasonName) return null;
   if (!state.tutorialOn) return null;
   if (ui.screen === "orders") return ui.idleHint;
   if (ui.tutorial) {
@@ -927,6 +950,14 @@ function handle(act, id) {
     ui.idleHint = null;
     save(state);
     render();
+    return;
+  }
+  if (act === "season-name-save") {
+    finishSeasonName(true);
+    return;
+  }
+  if (act === "season-name-keep") {
+    finishSeasonName(false);
     return;
   }
   if (act === "start" && !state.season) {
@@ -1777,6 +1808,21 @@ function renderResults() {
   </section>`;
 }
 
+function seasonNameCard() {
+  if (!ui.seasonName) return "";
+  return `<div class="overlay season-name" role="dialog" aria-label="Baker name">
+    <div class="sheet">
+      <p class="tag">New Selling Season</p>
+      <h2>What is your name?</h2>
+      <p>This is the name on your bakery sticker.</p>
+      <label class="name-label" for="season-name">Baker name</label>
+      <input id="season-name" class="name-field" maxlength="${BAKER_NAME_LIMIT}" autocomplete="off" enterkeyhint="done" value="${esc(nameOf())}">
+      ${textBtn("season-name-save", "Save my name", "btn-go")}
+      ${textBtn("season-name-keep", "Keep my name", "btn-quiet")}
+    </div>
+  </div>`;
+}
+
 function whatsNewCard() {
   const update = currentUpdate();
   if (!showWhatsNew() || !update) return "";
@@ -1819,7 +1865,7 @@ function render() {
       <p>3. Tap Add to Home Screen.</p>
       ${textBtn("home-help-done", "OK", "btn-go")}
     </div></div>` : "";
-  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml + homeHelp + whatsNewCard();
+  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml + homeHelp + whatsNewCard() + seasonNameCard();
   const next = document.querySelector(".screen");
   if (next && next.dataset.screen === prevName) next.scrollTop = top;
   document.querySelectorAll("[data-scroller]").forEach((el) => {

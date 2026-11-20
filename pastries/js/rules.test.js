@@ -690,13 +690,13 @@ test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () 
 });
 
 test("what's new shows once per version and keeps the bakery", () => {
-  assert.equal(GAME_VERSION, "4");
+  assert.equal(GAME_VERSION, "5");
   assert.equal(UPDATES[0].version, GAME_VERSION);
   assert.deepEqual(UPDATES[0].lines, [
-    "🎉 Custom Orders come way more often now!",
+    "📝 Change your name at the start of each Selling Season!",
   ]);
-  assert.equal(UPDATES[1].version, "3");
-  assert.equal(UPDATES[2].version, "2");
+  assert.equal(UPDATES[1].version, "4");
+  assert.equal(UPDATES[2].version, "3");
   assert.equal(newGame().seenVersion, "");
   const store = memory();
   store.setItem(STORAGE_KEY, JSON.stringify({
