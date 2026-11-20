@@ -569,13 +569,9 @@ export function mailBoxSvg({ packed = 0, closed = false, ribbon = null, ribbon2 
   return wrap(inner, size, "0 0 140 140");
 }
 
-export function hintHandSvg() {
-  return `<svg class="hint-pointer" viewBox="0 0 70 88" width="64" height="80" aria-hidden="true">
-    <g fill="#f6c7a4" fill-opacity="0.78" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round">
-      <ellipse cx="36" cy="24" rx="18" ry="14"/>
-      <rect x="27" y="30" width="18" height="46" rx="9"/>
-      <ellipse cx="16" cy="40" rx="8" ry="11" transform="rotate(-30 16 40)"/>
-    </g>
-    <ellipse cx="36" cy="70" rx="5" ry="3.5" fill="#fff" fill-opacity="0.7"/>
+export function guideArrowSvg() {
+  return `<svg class="guide-arrow-svg" viewBox="0 0 48 48" width="42" height="42" aria-hidden="true">
+    <path d="M24 4 V28" fill="none" stroke="#ff7aa2" stroke-width="7" stroke-linecap="round"/>
+    <path d="M10 24 L24 44 L38 24 Z" fill="#ff7aa2" stroke="#5c3a32" stroke-width="3" stroke-linejoin="round"/>
   </svg>`;
 }

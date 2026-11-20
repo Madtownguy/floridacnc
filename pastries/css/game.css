@@ -359,7 +359,7 @@ h2, h3 { margin: 0; }
   55% { transform: translateY(-8px) scale(1.06); }
   100% { transform: none; }
 }
-.bubble.is-next { animation: next-pulse 1s ease-in-out infinite; }
+.bubble.is-next { box-shadow: 0 0 0 4px rgba(255, 122, 162, 0.55); }
 .floater {
   position: absolute;
   right: 8px;
@@ -686,13 +686,30 @@ h2, h3 { margin: 0; }
 .coin { display: block; flex: none; }
 
 .is-next {
-  animation: next-pulse 1s ease-in-out infinite;
   z-index: 3;
+  animation: soft-glow 1.8s ease-in-out infinite;
 }
-@keyframes next-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 122, 162, 0); }
-  50% { box-shadow: 0 0 0 7px rgba(255, 122, 162, 0.55); }
+@keyframes soft-glow {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255, 122, 162, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 122, 162, 0.62); }
 }
+.guide-arrow {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+  transform: translate(-50%, -108%);
+  filter: drop-shadow(0 0 6px rgba(255, 122, 162, 0.75));
+  animation: arrow-glow 1.8s ease-in-out infinite;
+}
+.guide-arrow.is-below { transform: translate(-50%, 10px); }
+.guide-arrow.is-below .guide-arrow-svg { transform: rotate(180deg); }
+@keyframes arrow-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 122, 162, 0.45)); }
+  50% { filter: drop-shadow(0 0 10px rgba(255, 122, 162, 0.95)); }
+}
+.how-to { z-index: 13; align-items: center; }
+.how-to .sheet { text-align: left; }
+.how-to h2 { color: var(--pink-deep); text-align: center; }
 
 .hint-banner {
   position: absolute;
@@ -703,15 +720,6 @@ h2, h3 { margin: 0; }
   pointer-events: none;
 }
 .hint-banner.is-top { top: 8px; bottom: auto; }
-.hint-hand {
-  position: absolute;
-  z-index: 8;
-  pointer-events: none;
-  transform: translate(-50%, -88%);
-  animation: hint-bob 0.9s ease-in-out infinite;
-}
-.hint-hand.is-below { transform: translate(-50%, 6%); }
-.hint-hand.is-below .hint-pointer { transform: rotate(180deg); }
 .hint-label {
   background: #fff;
   border: 3px solid var(--line);
@@ -725,11 +733,7 @@ h2, h3 { margin: 0; }
 .hint-actions { display: flex; gap: 8px; margin-top: 6px; }
 .hint-actions .btn { pointer-events: auto; flex: 1; margin-top: 0; min-height: 48px; }
 .hint-skip { background: transparent; }
-.hint-pointer { display: block; filter: drop-shadow(0 3px 0 rgba(92, 58, 50, 0.25)); }
-@keyframes hint-bob {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 8px; }
-}
+.bubble.is-next { box-shadow: 0 0 0 4px rgba(255, 122, 162, 0.55); }
 
 .song-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
 .song {
