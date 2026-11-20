@@ -690,14 +690,16 @@ test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () 
 });
 
 test("what's new shows once per version and keeps the bakery", () => {
-  assert.equal(GAME_VERSION, "5");
+  assert.equal(GAME_VERSION, "6");
   assert.equal(UPDATES[0].version, GAME_VERSION);
   assert.deepEqual(UPDATES[0].lines, [
-    "📝 Change your name at the start of each Selling Season!",
+    "The game is easier to follow now!",
   ]);
-  assert.equal(UPDATES[1].version, "4");
-  assert.equal(UPDATES[2].version, "3");
+  assert.equal(UPDATES[1].version, "5");
+  assert.equal(UPDATES[2].version, "4");
   assert.equal(newGame().seenVersion, "");
+  assert.equal(newGame().guideOn, true);
+  assert.equal(newGame().howToSeen, false);
   const store = memory();
   store.setItem(STORAGE_KEY, JSON.stringify({
     v: 1,
@@ -720,6 +722,8 @@ test("what's new shows once per version and keeps the bakery", () => {
   assert.equal(loaded.bakerName, "Ada");
   assert.equal(loaded.tutorialDone, true);
   assert.equal(loaded.seenVersion, "");
+  assert.equal(loaded.guideOn, true);
+  assert.equal(loaded.howToSeen, false);
   assert.equal(loaded.season.playedMs, 4000);
   assert.equal(loaded.season.earned, 6);
   loaded.seenVersion = GAME_VERSION;

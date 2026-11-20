@@ -57,7 +57,7 @@ import {
 } from "./rules.js";
 import { createPlayer } from "./music.js";
 import { load, save } from "./state.js";
-import { bakerySvg, bookSvg, boxSvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, gearSvg, hintHandSvg, mailBoxSvg, noteSvg, shopSvg, sipSvg, toppingSvg, treatSvg } from "./view.js";
+import { bakerySvg, bookSvg, boxSvg, coinSvg, customerSvg, drinkSvg, emptyPlateSvg, gearSvg, guideArrowSvg, mailBoxSvg, noteSvg, shopSvg, sipSvg, toppingSvg, treatSvg } from "./view.js";
 
 const IDLE_MS = 4500;
 const WALK_MS = 900;
@@ -103,6 +103,7 @@ function freshUi() {
     whatsNew: false,
     seasonName: false,
     pendingTutorial: false,
+    howTo: false,
   };
 }
 
@@ -172,7 +173,7 @@ function frame(now) {
       onLeave();
     }
   }
-  if (state.tutorialOn && !ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !showWhatsNew() && !ui.seasonName && !document.hidden) {
+  if (state.tutorialOn && state.guideOn === false && !ui.tutorial && !ui.idleHint && !ui.busy && !ui.pause && !ui.musicOpen && !ui.confirmReset && !showWhatsNew() && !ui.seasonName && !document.hidden) {
     if (ui.lastInput && now - ui.lastInput > IDLE_MS) {
       const hint = idleHint();
       if (hint) {
@@ -721,15 +722,18 @@ function showWhatsNew() {
 }
 
 function activeHint() {
-  if (showWhatsNew() || ui.seasonName) return null;
-  if (!state.tutorialOn) return null;
-  if (ui.screen === "orders") return ui.idleHint;
+  if (showWhatsNew() || ui.seasonName || showHowTo()) return null;
   if (ui.tutorial) {
     const step = tutorialStep();
     if (!step) return null;
     return { target: step.id, text: step.text, cta: step.waitFor ? "" : (step.cta || "Next"), tutorial: true };
   }
-  return ui.idleHint;
+  if (state.guideOn === false) return null;
+  return nextStep();
+}
+
+function nextStep() {
+  return idleHint();
 }
 
 function idleHint() {
@@ -763,19 +767,19 @@ function idleHint() {
 }
 
 function placeHand() {
-  const hand = document.querySelector(".hint-hand");
-  if (!hand) return;
-  const target = document.querySelector(`[data-hint="${hand.dataset.target}"]`);
+  const arrow = document.querySelector(".guide-arrow");
+  if (!arrow) return;
+  const target = document.querySelector(`[data-hint="${arrow.dataset.target}"]`);
   if (!target) {
-    hand.hidden = true;
+    arrow.hidden = true;
     return;
   }
-  hand.hidden = false;
-  const key = `${hand.dataset.target}:${ui.tutorial ? ui.tutorial.index : "idle"}`;
+  arrow.hidden = false;
+  const key = `${arrow.dataset.target}:${ui.tutorial ? ui.tutorial.index : "next"}`;
   if (key !== handKey) {
     handKey = key;
-    const scroller = target.closest(".dock-main");
-    if (scroller) {
+    const scroller = target.closest(".dock-main, .screen");
+    if (scroller && scroller.classList.contains("dock-main")) {
       const item = target.getBoundingClientRect();
       const frame = scroller.getBoundingClientRect();
       if (item.top < frame.top + 4) scroller.scrollTop -= frame.top - item.top + 8;
@@ -784,14 +788,14 @@ function placeHand() {
   }
   const box = target.getBoundingClientRect();
   const appBox = app.getBoundingClientRect();
-  const x = Math.max(36, Math.min(appBox.width - 36, box.left + box.width / 2 - appBox.left));
-  const point = box.top + box.height * 0.55 - appBox.top;
-  const below = point < 130;
-  hand.classList.toggle("is-below", below);
-  hand.style.left = `${x}px`;
-  hand.style.top = `${point}px`;
+  const x = Math.max(28, Math.min(appBox.width - 28, box.left + box.width / 2 - appBox.left));
+  const point = box.top + box.height * 0.2 - appBox.top;
+  const below = point < 90;
+  arrow.classList.toggle("is-below", below);
+  arrow.style.left = `${x}px`;
+  arrow.style.top = `${below ? box.bottom - appBox.top + 4 : box.top - appBox.top}px`;
   const banner = document.querySelector(".hint-banner");
-  if (banner) banner.classList.toggle("is-top", box.top > appBox.top + appBox.height * 0.5);
+  if (banner) banner.classList.toggle("is-top", box.top > appBox.top + appBox.height * 0.55);
 }
 
 function openSub(screen) {
@@ -906,6 +910,31 @@ function handle(act, id) {
     const clean = new URL(location.href);
     clean.searchParams.delete("home");
     history.replaceState(null, "", clean.pathname + clean.search + clean.hash);
+    render();
+    return;
+  }
+  if (act === "guide-on") {
+    state = { ...state, guideOn: true };
+    save(state);
+    render();
+    return;
+  }
+  if (act === "guide-off") {
+    state = { ...state, guideOn: false };
+    ui.idleHint = null;
+    save(state);
+    render();
+    return;
+  }
+  if (act === "howto-card") {
+    ui.howTo = true;
+    render();
+    return;
+  }
+  if (act === "howto-done" || act === "howto-skip") {
+    state = { ...state, howToSeen: true };
+    ui.howTo = false;
+    save(state);
     render();
     return;
   }
@@ -1179,8 +1208,10 @@ function hintBox() {
   const cta = hint.cta ? `<button type="button" class="btn btn-go hint-next" data-act="tutorial-next">${esc(hint.cta)}</button>` : "";
   const skip = hint.tutorial ? `<button type="button" class="btn btn-quiet hint-skip" data-act="tutorial-skip">Skip</button>` : "";
   const actions = cta || skip ? `<div class="hint-actions">${cta}${skip}</div>` : "";
-  return `<div class="hint-banner"><div class="hint-label"><p>${esc(hint.text)}</p>${showCoin ? coinSvg(22) : ""}${actions}</div></div>
-    <div class="hint-hand" data-target="${esc(hint.target)}">${hintHandSvg()}</div>`;
+  const line = hint.tutorial || String(hint.text).startsWith("Next:") ? hint.text : `Next: ${hint.text}`;
+  const arrow = state.guideOn === false ? "" : `<div class="guide-arrow" data-target="${esc(hint.target)}">${guideArrowSvg()}</div>`;
+  return `<div class="hint-banner"><div class="hint-label"><p>${esc(line)}</p>${showCoin ? coinSvg(22) : ""}${actions}</div></div>
+    ${arrow}`;
 }
 
 function musicSheet() {
@@ -1755,6 +1786,12 @@ function renderSettings() {
       ${textBtn("tutorial-on", "On", state.tutorialOn ? "btn-go" : "")}
       ${textBtn("tutorial-off", "Off", state.tutorialOn ? "" : "btn-go")}
     </div>
+    <p class="name-label">Next arrow</p>
+    <p class="fine">On shows a soft arrow on the next tap. Off hides it.</p>
+    <div class="btn-row">
+      ${textBtn("guide-on", "On", state.guideOn === false ? "" : "btn-go")}
+      ${textBtn("guide-off", "Off", state.guideOn === false ? "btn-go" : "")}
+    </div>
     <p class="name-label">Logo</p>
     <p class="fine">This picture sits on the home screen.</p>
     <div class="logo-grid">${LOGOS.map((item) => {
@@ -1784,6 +1821,7 @@ function renderHelp() {
       <li><b>6.</b> Orders are calm mail requests. There is no timer. Make each item, put it in the box, close it, pick a ribbon, and tap Ship. The sticker uses your baker name. The Selling Season clock waits while Orders is open.</li>
     </ol>
     ${textBtn("howto", "Show me how", "btn-go")}
+    ${textBtn("howto-card", "Show the steps")}
     <p class="fine">On an iPhone or iPad, tap Share, then Add to Home Screen.</p>
     <h3>Start over</h3>
     <p class="fine">This clears your ${coinSvg(18)}, ingredients, the season timer, and level.</p>
@@ -1806,6 +1844,29 @@ function renderResults() {
     <ul class="unlocks">${lines}</ul>
     ${textBtn("home", "Back to the bakery", "btn-go", "", "home")}
   </section>`;
+}
+
+function showHowTo() {
+  if (ui.tutorial || ui.seasonName || ui.homeHelp || showWhatsNew()) return false;
+  return !!ui.howTo || !state.howToSeen;
+}
+
+function howToCard() {
+  if (!showHowTo()) return "";
+  return `<div class="overlay how-to" role="dialog" aria-label="How to play">
+    <div class="sheet">
+      <p class="tag">How to play</p>
+      <h2>Four easy steps</h2>
+      <ol class="whats-lines">
+        <li><b>1.</b> Read the order. The picture shows it.</li>
+        <li><b>2.</b> Tap that treat, then the topping. Drinks are one tap at a time.</li>
+        <li><b>3.</b> Tap Serve. In Orders, box it, close it, and tap Ship.</li>
+        <li><b>4.</b> A soft arrow shows the next tap. You can turn the arrow off in Settings.</li>
+      </ol>
+      ${textBtn("howto-done", "Let's bake!", "btn-go")}
+      ${textBtn("howto-skip", "Skip", "btn-quiet")}
+    </div>
+  </div>`;
 }
 
 function seasonNameCard() {
@@ -1865,7 +1926,7 @@ function render() {
       <p>3. Tap Add to Home Screen.</p>
       ${textBtn("home-help-done", "OK", "btn-go")}
     </div></div>` : "";
-  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml + homeHelp + whatsNewCard() + seasonNameCard();
+  app.innerHTML = screen + hintBox() + musicSheet() + toastHtml + homeHelp + whatsNewCard() + howToCard() + seasonNameCard();
   const next = document.querySelector(".screen");
   if (next && next.dataset.screen === prevName) next.scrollTop = top;
   document.querySelectorAll("[data-scroller]").forEach((el) => {
@@ -1899,9 +1960,9 @@ function unlockAudio(event) {
 app.addEventListener("pointerdown", (event) => {
   ui.lastInput = performance.now();
   unlockAudio(event);
-  if (!ui.idleHint || event.target.closest(".hint-hand")) return;
+  if (!ui.idleHint || event.target.closest(".guide-arrow")) return;
   ui.idleHint = null;
-  document.querySelector(".hint-hand")?.remove();
+  document.querySelector(".guide-arrow")?.remove();
   document.querySelectorAll(".is-next").forEach((el) => el.classList.remove("is-next"));
 });
 document.addEventListener("touchend", unlockAudio, { passive: true });

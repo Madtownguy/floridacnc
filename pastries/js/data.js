@@ -42,9 +42,15 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * with that same version. The card lists that entry's lines once,
  * the first time the game opens after the version changes.
  */
-export const GAME_VERSION = "5";
+export const GAME_VERSION = "6";
 
 export const UPDATES = [
+  {
+    version: "6",
+    lines: [
+      "The game is easier to follow now!",
+    ],
+  },
   {
     version: "5",
     lines: [
