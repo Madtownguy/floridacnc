@@ -1,0 +1,17 @@
+{
+  "name": "deadacre-ios",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Dead Acre iPhone app. The game files are copied from /zombies at build time.",
+  "scripts": {
+    "sync": "node ../sync-www.mjs deadacre && npx cap sync ios && node ../patch-ios.mjs deadacre",
+    "icons": "python3 ../make-icons.py"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.6.2",
+    "@capacitor/ios": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2"
+  }
+}

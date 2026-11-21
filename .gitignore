@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+*.p8
+*.p12
+*.mobileprovision
+*.certSigningRequest
+
+# Generated when the iOS apps are bundled. Source of truth is /shopfloor and /zombies.
+apps/*/www/
+apps/*/ios/App/App/public/
+apps/*/ios/App/build/
+apps/*/ios/DerivedData/
+apps/*/build/
+
+# Xcode local state
+xcuserdata/
+*.xcuserstate

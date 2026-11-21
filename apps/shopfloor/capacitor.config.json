@@ -1,0 +1,14 @@
+{
+  "appId": "com.joshbutz.shopfloor",
+  "appName": "Shop Floor",
+  "webDir": "www",
+  "backgroundColor": "#12171e",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "zoomEnabled": false,
+    "allowsLinkPreview": false,
+    "backgroundColor": "#12171e",
+    "preferredContentMode": "mobile"
+  }
+}
