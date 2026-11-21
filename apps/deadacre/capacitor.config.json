@@ -1,0 +1,14 @@
+{
+  "appId": "com.joshbutz.deadacre",
+  "appName": "Dead Acre",
+  "webDir": "www",
+  "backgroundColor": "#070b09",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "zoomEnabled": false,
+    "allowsLinkPreview": false,
+    "backgroundColor": "#070b09",
+    "preferredContentMode": "mobile"
+  }
+}

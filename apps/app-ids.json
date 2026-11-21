@@ -1,0 +1,20 @@
+{
+  "shopfloor": {
+    "folder": "shopfloor",
+    "webDir": "shopfloor",
+    "appId": "com.joshbutz.shopfloor",
+    "appName": "Shop Floor",
+    "version": "1.0.0",
+    "sku": "shopfloor-ios",
+    "background": "#12171e"
+  },
+  "deadacre": {
+    "folder": "deadacre",
+    "webDir": "zombies",
+    "appId": "com.joshbutz.deadacre",
+    "appName": "Dead Acre",
+    "version": "1.0.0",
+    "sku": "deadacre-ios",
+    "background": "#070b09"
+  }
+}

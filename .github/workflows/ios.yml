@@ -1,0 +1,211 @@
+# Shop Floor and Dead Acre iPhone builds.
+#
+# Simulator (this runs on pull requests and on main): compiles both apps for
+# the iOS Simulator with signing turned off. No Apple account needed.
+#
+# TestFlight (dormant): runs only when someone starts this workflow by hand
+# and checks "Upload signed builds to TestFlight". It fails with the names of
+# any missing secrets until docs/IOS_RELEASE.md has been followed. It does not
+# run on a normal push, so the website deploy is unaffected.
+
+name: iOS
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "shopfloor/**"
+      - "zombies/**"
+      - ".github/workflows/ios.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "shopfloor/**"
+      - "zombies/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+    inputs:
+      ship:
+        description: Upload signed builds to TestFlight
+        type: boolean
+        default: false
+      app:
+        description: Which app to send to TestFlight
+        type: choice
+        options:
+          - both
+          - shopfloor
+          - deadacre
+        default: both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}-${{ github.event_name }}-${{ github.event.inputs.ship || 'build' }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    name: Simulator · ${{ matrix.app }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [shopfloor, deadacre]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+
+      - name: Install Capacitor
+        working-directory: apps/${{ matrix.app }}
+        run: npm ci
+        env:
+          CAPACITOR_TELEMETRY: "0"
+
+      - name: Bundle the game into the app
+        working-directory: apps/${{ matrix.app }}
+        run: npm run sync
+        env:
+          CAPACITOR_TELEMETRY: "0"
+
+      - name: Check the bundle stays on-device
+        run: node apps/verify-bundle.mjs ${{ matrix.app }}
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build for the iOS Simulator (unsigned)
+        working-directory: apps/${{ matrix.app }}/ios/App
+        run: |
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+  choose:
+    name: Choose TestFlight apps
+    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.ship == true || github.event.inputs.ship == 'true') }}
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.set.outputs.apps }}
+    steps:
+      - id: set
+        run: |
+          case "${{ github.event.inputs.app }}" in
+            shopfloor) echo 'apps=["shopfloor"]' >> "$GITHUB_OUTPUT" ;;
+            deadacre) echo 'apps=["deadacre"]' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'apps=["shopfloor","deadacre"]' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  testflight:
+    name: TestFlight · ${{ matrix.app }}
+    needs: [simulator, choose]
+    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.ship == true || github.event.inputs.ship == 'true') && needs.simulator.result == 'success' }}
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJson(needs.choose.outputs.apps) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check Apple secrets
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_TOKEN: ${{ secrets.MATCH_GIT_TOKEN }}
+        run: |
+          python3 - << 'PY'
+          import os, sys
+          names = [
+              "APP_STORE_CONNECT_KEY_ID",
+              "APP_STORE_CONNECT_ISSUER_ID",
+              "APP_STORE_CONNECT_KEY",
+              "APPLE_TEAM_ID",
+              "MATCH_GIT_URL",
+              "MATCH_PASSWORD",
+              "MATCH_GIT_TOKEN",
+          ]
+          missing = [name for name in names if not os.environ.get(name, "").strip()]
+          for name in missing:
+              print(f"::error::Secret {name} is empty. Add it under Settings, Secrets and variables, Actions. See docs/IOS_RELEASE.md.")
+          sys.exit(1 if missing else 0)
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+
+      - name: Install Capacitor
+        working-directory: apps/${{ matrix.app }}
+        run: npm ci
+        env:
+          CAPACITOR_TELEMETRY: "0"
+
+      - name: Bundle the game into the app
+        working-directory: apps/${{ matrix.app }}
+        run: npm run sync
+        env:
+          CAPACITOR_TELEMETRY: "0"
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: apps/fastlane
+
+      - name: Git identity for the certificate repo
+        run: |
+          git config --global user.email "ios-signing@floridacnc.com"
+          git config --global user.name "Florida CNC iOS"
+
+      - name: Match git login
+        env:
+          MATCH_GIT_TOKEN: ${{ secrets.MATCH_GIT_TOKEN }}
+        run: |
+          python3 - << 'PY'
+          import base64, os
+          token = os.environ["MATCH_GIT_TOKEN"].strip()
+          auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"MATCH_GIT_BASIC_AUTHORIZATION={auth}\n")
+          PY
+
+      - name: Build and upload to TestFlight
+        working-directory: apps/fastlane
+        env:
+          IOS_APP: ${{ matrix.app }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+        run: bundle exec fastlane ios testflight app:${{ matrix.app }}

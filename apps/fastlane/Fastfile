@@ -1,0 +1,123 @@
+# Signed TestFlight builds. This lane is only invoked by the "iOS" GitHub
+# Actions workflow when "Upload signed builds to TestFlight" is checked.
+# It does nothing useful until the secrets in docs/IOS_RELEASE.md exist.
+
+require "json"
+
+default_platform(:ios)
+
+REQUIRED = %w[
+  APP_STORE_CONNECT_KEY_ID
+  APP_STORE_CONNECT_ISSUER_ID
+  APP_STORE_CONNECT_KEY
+  APPLE_TEAM_ID
+  MATCH_GIT_URL
+  MATCH_PASSWORD
+  MATCH_GIT_BASIC_AUTHORIZATION
+].freeze
+
+platform :ios do
+  desc "Sign one app and upload it to TestFlight. app:shopfloor or app:deadacre"
+  lane :testflight do |options|
+    missing = REQUIRED.select { |name| ENV[name].to_s.strip.empty? }
+    unless missing.empty?
+      UI.user_error!(
+        "Missing #{missing.join(', ')}. Add them as GitHub Actions secrets. " \
+        "The click-by-click list is in docs/IOS_RELEASE.md. " \
+        "This lane stays dormant until those secrets exist."
+      )
+    end
+
+    app_key = options[:app] || ENV["IOS_APP"]
+    ids = JSON.parse(File.read(File.expand_path("../app-ids.json", __dir__)))
+    meta = ids[app_key]
+    UI.user_error!("Unknown app '#{app_key}'. Use shopfloor or deadacre.") unless meta
+
+    setup_ci
+
+    key_body = ENV["APP_STORE_CONNECT_KEY"].strip
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"].strip,
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"].strip,
+      key_content: key_body,
+      is_key_content_base64: !key_body.include?("BEGIN"),
+      duration: 1200,
+      in_house: false
+    )
+
+    app_identifier = meta["appId"]
+    team_id = ENV["APPLE_TEAM_ID"].strip
+    project_dir = File.expand_path("../#{meta["folder"]}/ios/App", __dir__)
+    xcodeproj = File.join(project_dir, "App.xcodeproj")
+
+    match(
+      type: "appstore",
+      readonly: false,
+      api_key: api_key,
+      app_identifier: app_identifier,
+      team_id: team_id,
+      git_url: ENV["MATCH_GIT_URL"].strip,
+      git_branch: ENV.fetch("MATCH_GIT_BRANCH", "main"),
+      git_basic_authorization: ENV["MATCH_GIT_BASIC_AUTHORIZATION"].strip,
+      generate_apple_certs: true,
+      skip_docs: true,
+      verbose: false
+    )
+
+    mapping = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING] || {}
+    profile_name = mapping[app_identifier]
+    UI.user_error!("match did not return a provisioning profile for #{app_identifier}") if profile_name.to_s.empty?
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: xcodeproj,
+      team_id: team_id,
+      bundle_identifier: app_identifier,
+      code_sign_identity: "Apple Distribution",
+      profile_name: profile_name,
+      targets: ["App"]
+    )
+
+    set_build_version(xcodeproj, meta["version"], ENV.fetch("GITHUB_RUN_NUMBER", "1"))
+
+    ipa = File.join(project_dir, "build", "#{app_key}.ipa")
+    build_app(
+      project: xcodeproj,
+      scheme: "App",
+      configuration: "Release",
+      clean: true,
+      export_method: "app-store",
+      export_team_id: team_id,
+      output_directory: File.dirname(ipa),
+      output_name: app_key,
+      export_options: {
+        signingStyle: "manual",
+        teamID: team_id,
+        provisioningProfiles: {
+          app_identifier => profile_name
+        }
+      }
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: app_identifier,
+      ipa: lane_context[SharedValues::IPA_OUTPUT_PATH] || ipa,
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      distribute_external: false,
+      changelog: "Build #{ENV.fetch('GITHUB_RUN_NUMBER', '1')}"
+    )
+  end
+end
+
+def set_build_version(xcodeproj, version, build)
+  project = Xcodeproj::Project.open(xcodeproj)
+  project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings["MARKETING_VERSION"] = version
+      config.build_settings["CURRENT_PROJECT_VERSION"] = build.to_s
+    end
+  end
+  project.save
+end
