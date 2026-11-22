@@ -16,5 +16,16 @@
     "version": "1.0.0",
     "sku": "deadacre-ios",
     "background": "#070b09"
+  },
+  "pastries": {
+    "folder": "pastries",
+    "webDir": "pastries",
+    "appId": "com.joshbutz.pastries",
+    "appName": "Pastries and more!",
+    "version": "1.0.0",
+    "sku": "pastries-ios",
+    "background": "#fff6ee",
+    "statusBar": "darkContent",
+    "iconLogo": "cupcake"
   }
 }

@@ -1,6 +1,6 @@
-# Shop Floor and Dead Acre iPhone builds.
+# Shop Floor, Dead Acre, and Pastries and more! iPhone builds.
 #
-# Simulator (this runs on pull requests and on main): compiles both apps for
+# Simulator (this runs on pull requests and on main): compiles each app for
 # the iOS Simulator with signing turned off. No Apple account needed.
 #
 # TestFlight (dormant): runs only when someone starts this workflow by hand
@@ -16,6 +16,11 @@ on:
       - "apps/**"
       - "shopfloor/**"
       - "zombies/**"
+      - "pastries/**"
+      - "support.html"
+      - "privacy.html"
+      - "privacy/**"
+      - "docs/IOS_RELEASE.md"
       - ".github/workflows/ios.yml"
   push:
     branches: [main]
@@ -23,6 +28,11 @@ on:
       - "apps/**"
       - "shopfloor/**"
       - "zombies/**"
+      - "pastries/**"
+      - "support.html"
+      - "privacy.html"
+      - "privacy/**"
+      - "docs/IOS_RELEASE.md"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
     inputs:
@@ -34,10 +44,11 @@ on:
         description: Which app to send to TestFlight
         type: choice
         options:
-          - both
+          - all
           - shopfloor
           - deadacre
-        default: both
+          - pastries
+        default: all
 
 permissions:
   contents: read
@@ -47,6 +58,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  checks:
+    name: Support email and native shell
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Check support pages and the iOS shell
+        run: node --test apps/native-shell.test.mjs apps/support.test.mjs apps/ios-project.test.mjs
+
   simulator:
     name: Simulator · ${{ matrix.app }}
     runs-on: macos-latest
@@ -54,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [shopfloor, deadacre]
+        app: [shopfloor, deadacre, pastries]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -111,7 +138,8 @@ jobs:
           case "${{ github.event.inputs.app }}" in
             shopfloor) echo 'apps=["shopfloor"]' >> "$GITHUB_OUTPUT" ;;
             deadacre) echo 'apps=["deadacre"]' >> "$GITHUB_OUTPUT" ;;
-            *) echo 'apps=["shopfloor","deadacre"]' >> "$GITHUB_OUTPUT" ;;
+            pastries) echo 'apps=["pastries"]' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'apps=["shopfloor","deadacre","pastries"]' >> "$GITHUB_OUTPUT" ;;
           esac
 
   testflight:

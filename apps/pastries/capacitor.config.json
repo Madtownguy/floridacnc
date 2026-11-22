@@ -1,0 +1,14 @@
+{
+  "appId": "com.joshbutz.pastries",
+  "appName": "Pastries and more!",
+  "webDir": "www",
+  "backgroundColor": "#fff6ee",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "zoomEnabled": false,
+    "allowsLinkPreview": false,
+    "backgroundColor": "#fff6ee",
+    "preferredContentMode": "mobile"
+  }
+}

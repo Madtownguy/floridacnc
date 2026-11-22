@@ -17,7 +17,7 @@ REQUIRED = %w[
 ].freeze
 
 platform :ios do
-  desc "Sign one app and upload it to TestFlight. app:shopfloor or app:deadacre"
+  desc "Sign one app and upload it to TestFlight. app:shopfloor, app:deadacre, or app:pastries"
   lane :testflight do |options|
     missing = REQUIRED.select { |name| ENV[name].to_s.strip.empty? }
     unless missing.empty?
@@ -31,7 +31,7 @@ platform :ios do
     app_key = options[:app] || ENV["IOS_APP"]
     ids = JSON.parse(File.read(File.expand_path("../app-ids.json", __dir__)))
     meta = ids[app_key]
-    UI.user_error!("Unknown app '#{app_key}'. Use shopfloor or deadacre.") unless meta
+    UI.user_error!("Unknown app '#{app_key}'. Use #{ids.keys.join(', ')}.") unless meta
 
     setup_ci
 
