@@ -48,10 +48,10 @@ function memory() {
   };
 }
 
-test("season length is 20 minutes and lives in the config constant", () => {
-  assert.equal(SEASON_PLAY_MS, 20 * 60 * 1000);
-  assert.equal(formatDuration(SEASON_PLAY_MS), "20 minutes");
-  assert.match(clockLabel(0), /20-minute season · 20 min to go/);
+test("season length is 15 minutes and lives in the config constant", () => {
+  assert.equal(SEASON_PLAY_MS, 15 * 60 * 1000);
+  assert.equal(formatDuration(SEASON_PLAY_MS), "15 minutes");
+  assert.match(clockLabel(0), /15-minute season · 15 min to go/);
   assert.equal(seasonClock(null).total, SEASON_PLAY_MS);
 });
 
@@ -95,13 +95,13 @@ test("a saved season past 20 minutes completes instead of breaking", () => {
   assert.equal(closed.played, 60 * 60 * 1000);
   assert.ok(closed.unlocks.some((item) => item.kind === "treat" && item.id === "donut"));
   const almost = startSeason(newGame(), () => 0);
-  almost.season.playedMs = 19 * 60 * 1000;
+  almost.season.playedMs = 14 * 60 * 1000;
   assert.equal(seasonTimeUp(almost.season), false);
-  almost.season.playedMs = 20 * 60 * 1000;
+  almost.season.playedMs = 15 * 60 * 1000;
   assert.equal(seasonTimeUp(almost.season), true);
 });
 
-test("an in-progress season keeps minutes played and caps time left at 20", () => {
+test("an in-progress season keeps minutes played and caps time left at 15", () => {
   function saved(playedMin, coins, limitMin) {
     const raw = {
       v: 1,
@@ -125,8 +125,8 @@ test("an in-progress season keeps minutes played and caps time left at 20", () =
   const early = saved(0, 77, 25);
   assert.equal(early.coins, 77);
   assert.equal(early.season.playedMs, 0);
-  assert.equal(early.season.limitMs, 20 * 60 * 1000);
-  assert.equal(seasonClock(early.season).left, 20 * 60 * 1000);
+  assert.equal(early.season.limitMs, 15 * 60 * 1000);
+  assert.equal(seasonClock(early.season).left, 15 * 60 * 1000);
   const halfway = saved(10, 80, 25);
   assert.equal(halfway.coins, 80);
   assert.equal(halfway.season.playedMs, 10 * 60 * 1000);
@@ -138,8 +138,16 @@ test("an in-progress season keeps minutes played and caps time left at 20", () =
   assert.equal(later.coins, 90);
   const long = saved(10, 100, 35);
   assert.equal(long.season.playedMs, 10 * 60 * 1000);
-  assert.equal(seasonClock(long.season).left, 20 * 60 * 1000);
+  assert.equal(seasonClock(long.season).left, 15 * 60 * 1000);
   assert.equal(long.coins, 100);
+  const current = saved(2, 64, 20);
+  assert.equal(current.coins, 64);
+  assert.equal(current.season.playedMs, 2 * 60 * 1000);
+  assert.equal(seasonClock(current.season).left, 15 * 60 * 1000);
+  const mid = saved(8, 70, 20);
+  assert.equal(mid.coins, 70);
+  assert.equal(mid.season.playedMs, 8 * 60 * 1000);
+  assert.equal(seasonClock(mid.season).left, 12 * 60 * 1000);
 });
 
 test("closing the page does not invent play time, and the total is saved", () => {
@@ -690,13 +698,13 @@ test("matcha, pancakes, ribbons, and the bakery sticker stay with her save", () 
 });
 
 test("what's new shows once per version and keeps the bakery", () => {
-  assert.equal(GAME_VERSION, "6");
+  assert.equal(GAME_VERSION, "7");
   assert.equal(UPDATES[0].version, GAME_VERSION);
   assert.deepEqual(UPDATES[0].lines, [
-    "The game is easier to follow now!",
+    "Selling Seasons are now 15 minutes!",
   ]);
-  assert.equal(UPDATES[1].version, "5");
-  assert.equal(UPDATES[2].version, "4");
+  assert.equal(UPDATES[1].version, "6");
+  assert.equal(UPDATES[2].version, "5");
   assert.equal(newGame().seenVersion, "");
   assert.equal(newGame().guideOn, true);
   assert.equal(newGame().howToSeen, false);

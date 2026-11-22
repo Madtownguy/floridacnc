@@ -42,9 +42,15 @@ export const STORAGE_KEY = "pastries-and-more-v1";
  * with that same version. The card lists that entry's lines once,
  * the first time the game opens after the version changes.
  */
-export const GAME_VERSION = "6";
+export const GAME_VERSION = "7";
 
 export const UPDATES = [
+  {
+    version: "7",
+    lines: [
+      "Selling Seasons are now 15 minutes!",
+    ],
+  },
   {
     version: "6",
     lines: [
@@ -98,11 +104,12 @@ export function currentUpdate() {
  * It pauses when the game is closed, paused, or sitting on the home screen.
  * Minutes already played are saved in localStorage, so short visits add up.
  *
- *   20 * 60 * 1000   twenty minutes (Madison's season)
+ *   15 * 60 * 1000   fifteen minutes (Madison's season)
+ *   20 * 60 * 1000   twenty minutes
  *   25 * 60 * 1000   twenty-five minutes
  *   35 * 60 * 1000   thirty-five minutes
  */
-export const SEASON_PLAY_MS = 20 * 60 * 1000;
+export const SEASON_PLAY_MS = 15 * 60 * 1000;
 
 /**
  * Coins added on top of her balance when a Selling Season begins.
