@@ -1,0 +1,17 @@
+{
+  "name": "pastries-ios",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pastries and more! iPhone app. The game files are copied from /pastries at build time.",
+  "scripts": {
+    "sync": "node ../sync-www.mjs pastries && npx cap sync ios && node ../patch-ios.mjs pastries",
+    "icons": "python3 ../make-icons.py pastries"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.6.2",
+    "@capacitor/ios": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2"
+  }
+}

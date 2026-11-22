@@ -1,6 +1,6 @@
 // Fail if an iOS bundle would load the live site, or if the website copies changed.
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,8 +15,32 @@ function fail(message) {
   errors.push(message);
 }
 
+function remoteLoads(dir) {
+  const hits = [];
+  const files = walkText(dir);
+  const pattern = /https?:\/\/(?!www\.w3\.org\/)/gi;
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    if (text.includes("floridacnc.com")) hits.push(`${file} mentions floridacnc.com`);
+    const found = text.match(pattern);
+    if (found) hits.push(`${file} ${found[0]}`);
+  }
+  return hits;
+}
+
+function walkText(dir, acc = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) walkText(path, acc);
+    else if (/\.(html|js|css|svg|json|webmanifest|txt)$/.test(entry.name)) acc.push(path);
+  }
+  return acc;
+}
+
+const support = JSON.parse(readFileSync(join(appsDir, "support.json"), "utf8"));
+
 if (!meta) {
-  console.error("Usage: node verify-bundle.mjs <shopfloor|deadacre>");
+  console.error(`Usage: node verify-bundle.mjs <${Object.keys(ids).join("|")}>`);
   process.exit(1);
 }
 
@@ -33,9 +57,24 @@ if (config.server?.hostname && config.server.hostname !== "localhost") {
   fail(`server.hostname is ${config.server.hostname}`);
 }
 if (!html.includes('id="native-shell"')) fail("native shell was not injected into the app copy");
+if (!html.includes(support.email)) fail("support email was not copied into the app");
+if (!html.includes("native-support")) fail("support line was not added to the app copy");
+if (source.includes(support.email)) fail("website index.html contains the support email");
 
 const stripped = html.replace(/\n<!-- native-shell:[\s\S]*?<script id="native-shell">[\s\S]*?<\/script>\n/, "");
 if (stripped !== source) fail("app index.html is not the website file plus the native shell");
+
+if (key === "pastries") {
+  if (!html.includes("native-pastries")) fail("pastries app copy is missing the home-screen hide rules");
+  if (source.includes("native-pastries") || source.includes("native-shell")) {
+    fail("website index.html contains the native app shell");
+  }
+  if (html.includes(`mailto:${support.email}`)) fail("pastries app copy must not open Mail");
+  const remote = remoteLoads(join(project, "www"));
+  if (remote.length) fail(`pastries bundle loads a remote address: ${remote.slice(0, 5).join(", ")}`);
+} else if (!html.includes(`mailto:${support.email}`)) {
+  fail("support mailto link was not added to the app copy");
+}
 
 if (key === "shopfloor") {
   const manifest = readFileSync(join(project, "www", "models", "available.json"), "utf8");

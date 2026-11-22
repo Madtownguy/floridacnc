@@ -5,7 +5,7 @@ node_modules/
 *.mobileprovision
 *.certSigningRequest
 
-# Generated when the iOS apps are bundled. Source of truth is /shopfloor and /zombies.
+# Generated when the iOS apps are bundled. Source of truth is /shopfloor, /zombies, and /pastries.
 apps/*/www/
 apps/*/ios/App/App/public/
 apps/*/ios/App/build/

@@ -1,27 +1,31 @@
 // After `cap sync`, keep the native shell settings that Capacitor does not own:
-// portrait lock, light status bar, no browser zoom, iPhone-only, export compliance.
+// portrait lock, status bar, no browser zoom, iPhone-only, export compliance.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const appsDir = dirname(fileURLToPath(import.meta.url));
 const ids = JSON.parse(readFileSync(join(appsDir, "app-ids.json"), "utf8"));
-const key = process.argv[2];
-const meta = ids[key];
+
+const STATUS_BAR_PLIST = {
+  lightContent: "UIStatusBarStyleLightContent",
+  darkContent: "UIStatusBarStyleDarkContent",
+  default: "UIStatusBarStyleDefault",
+};
 
 function main() {
-
-if (!meta) {
-  console.error("Usage: node patch-ios.mjs <shopfloor|deadacre>");
-  process.exit(1);
-}
+  const key = process.argv[2];
+  const meta = ids[key];
+  if (!meta) {
+    console.error(`Usage: node patch-ios.mjs <${Object.keys(ids).join("|")}>`);
+    process.exit(1);
+  }
 
 const project = join(appsDir, meta.folder);
 const appDir = join(project, "ios", "App", "App");
-const rgb = hexToUnit(meta.background);
-const color = `UIColor(red: ${rgb[0]}, green: ${rgb[1]}, blue: ${rgb[2]}, alpha: 1)`;
+const color = uiColorLiteral(meta.background);
 
-writeFileSync(join(appDir, "AppViewController.swift"), appViewController(color));
+writeFileSync(join(appDir, "AppViewController.swift"), appViewController(color, meta.statusBar));
 writeFileSync(join(appDir, "PrivacyInfo.xcprivacy"), PRIVACY_MANIFEST);
 
 const plistPath = join(appDir, "Info.plist");
@@ -34,7 +38,7 @@ plist = replaceArray(plist, "UISupportedInterfaceOrientations", ["UIInterfaceOri
 plist = replaceArray(plist, "UISupportedInterfaceOrientations~ipad", ["UIInterfaceOrientationPortrait"]);
 plist = ensureKey(plist, "ITSAppUsesNonExemptEncryption", "<false/>");
 plist = ensureKey(plist, "LSApplicationCategoryType", "<string>public.app-category.games</string>");
-plist = ensureKey(plist, "UIStatusBarStyle", "<string>UIStatusBarStyleLightContent</string>");
+plist = applyStatusBar(plist, meta.statusBar);
 plist = ensureKey(plist, "UIRequiresFullScreen", "<true/>");
 writeFileSync(plistPath, plist);
 
@@ -59,6 +63,9 @@ if (scene.includes("CAPBridgeViewController()")) {
     "window?.rootViewController = CAPBridgeViewController()",
     `window?.backgroundColor = ${color}\n        window?.rootViewController = AppViewController()`,
   );
+}
+if (scene.includes("window?.backgroundColor")) {
+  scene = scene.replace(/window\?\.backgroundColor = UIColor\([^)]*\)/, `window?.backgroundColor = ${color}`);
 }
 writeFileSync(scenePath, scene);
 
@@ -91,6 +98,21 @@ console.log(`Patched iOS project for ${meta.appName} (${meta.appId})`);
 
 function hexToUnit(hex) {
   return [1, 3, 5].map((start) => (parseInt(hex.slice(start, start + 2), 16) / 255).toFixed(4));
+}
+
+export function uiColorLiteral(hex) {
+  const rgb = hexToUnit(hex);
+  return `UIColor(red: ${rgb[0]}, green: ${rgb[1]}, blue: ${rgb[2]}, alpha: 1)`;
+}
+
+function applyStatusBar(plist, style) {
+  if (!style) return ensureKey(plist, "UIStatusBarStyle", "<string>UIStatusBarStyleLightContent</string>");
+  const value = STATUS_BAR_PLIST[style];
+  if (!value) throw new Error(`Unknown statusBar "${style}". Use ${Object.keys(STATUS_BAR_PLIST).join(", ")}.`);
+  const xml = `<string>${value}</string>`;
+  const pattern = /<key>UIStatusBarStyle<\/key>\s*<string>[^<]*<\/string>/;
+  if (pattern.test(plist)) return plist.replace(pattern, `<key>UIStatusBarStyle</key>\n\t${xml}`);
+  return ensureKey(plist, "UIStatusBarStyle", xml);
 }
 
 function replaceArray(plist, key, values) {
@@ -132,7 +154,13 @@ function ensurePbxFile(pbx, file) {
   return pbx;
 }
 
-function appViewController(colorLiteral) {
+export function appViewController(colorLiteral, statusBar) {
+  if (statusBar && !STATUS_BAR_PLIST[statusBar]) {
+    throw new Error(`Unknown statusBar "${statusBar}"`);
+  }
+  const statusMethod = statusBar
+    ? `\n    override var preferredStatusBarStyle: UIStatusBarStyle {\n        return .${statusBar}\n    }\n`
+    : "";
   return `import UIKit
 import WebKit
 import Capacitor
@@ -151,7 +179,7 @@ class AppViewController: CAPBridgeViewController {
         super.viewDidAppear(animated)
         lockBrowserGestures()
     }
-
+${statusMethod}
     private func lockBrowserGestures() {
         guard let scroll = webView?.scrollView else { return }
         scroll.bounces = false
@@ -269,4 +297,5 @@ const SCHEME = `<?xml version="1.0" encoding="UTF-8"?>
 </Scheme>
 `;
 
-main();
+const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) main();
