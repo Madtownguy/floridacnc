@@ -42,6 +42,30 @@
     fetch(e.href, n);
   }
 })();
+function eraseDeadAcre() {
+  try {
+    if (typeof localStorage > `u`) return;
+    localStorage.removeItem(`dead-acre-save-v2`);
+    localStorage.removeItem(`dead-acre-save-v1`);
+  } catch {}
+}
+function reloadWithoutReset() {
+  let url = new URL(location.href);
+  url.searchParams.delete(`reset`);
+  location.replace(url.pathname + url.search + url.hash);
+}
+function confirmErase() {
+  if (typeof confirm != `function` || !confirm(`Erase all progress?`)) return;
+  eraseDeadAcre();
+  reloadWithoutReset();
+}
+(function () {
+  try {
+    if (new URLSearchParams(location.search).get(`reset`) !== `1`) return;
+    eraseDeadAcre();
+    reloadWithoutReset();
+  } catch {}
+})();
 var e = {
     cellSize: 72,
     economy: {
@@ -5384,6 +5408,8 @@ var Rt = {
         }),
         Y(`pause-resume`).addEventListener(`click`, () => e.togglePause()),
         Y(`pause-leave`).addEventListener(`click`, () => e.abandon()),
+        Y(`menu-reset`).addEventListener(`click`, () => confirmErase()),
+        Y(`pause-reset`).addEventListener(`click`, () => confirmErase()),
         Y(`end-retry`).addEventListener(`click`, () => e.retry()),
         Y(`end-menu`).addEventListener(`click`, () => e.abandon()),
         Y(`menu-perks`).addEventListener(`click`, () => {
@@ -6071,6 +6097,7 @@ button.gold:disabled{opacity:.55;box-shadow:none}
 .map-card.is-locked{min-height:96px}
 .map-card canvas.thumb{height:56px}
 .map-card span{display:block;font-size:12px;line-height:1.3}
+#menu-reset,#pause-reset{width:100%}
 </style>
   </head>
   <body>
@@ -6150,6 +6177,7 @@ button.gold:disabled{opacity:.55;box-shadow:none}
             <button id="menu-perks" class="ghost" type="button">Perks</button>
             <button id="menu-mute" class="ghost" type="button">Sound on</button>
           </div>
+          <button id="menu-reset" class="ghost danger" type="button">Start over</button>
         </div>
       </div>
       <div id="levelup" class="overlay moment" hidden>
@@ -6184,6 +6212,7 @@ button.gold:disabled{opacity:.55;box-shadow:none}
             <button id="pause-mute" class="ghost" type="button">Sound</button>
             <button id="pause-leave" class="ghost danger" type="button">Leave</button>
           </div>
+          <button id="pause-reset" class="ghost danger" type="button">Start over</button>
         </div>
       </div>
       <div id="end" class="overlay" hidden>
